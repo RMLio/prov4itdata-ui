@@ -25,6 +25,8 @@ describe('Transfer Component API calls', () => {
 
 
     beforeEach(() => {
+        cy.intercept('GET', '/rml/mappings-metadata.json', {fixture : 'mappings-metadata.json'})
+        cy.intercept('GET', '/rml/*/*.ttl', {fixture : 'example-mapping.ttl'}).as('getContentsOfRMLMapping')
         cy.visit('/')
 
         cy

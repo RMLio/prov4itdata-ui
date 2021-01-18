@@ -33,9 +33,10 @@ describe('Transfer Component', () => {
         })
     }
     beforeEach(() => {
-        cy.visit('/')
 
-        cy.intercept('GET', '/rml/mappings-metadata.json', { 'fixture': 'mappings-metadata' })
+        cy.intercept('GET', '/rml/mappings-metadata.json', {fixture : 'mappings-metadata.json'})
+
+        cy.visit('/')
 
         cy
             .fixture('mappings-metadata')
