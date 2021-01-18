@@ -1,0 +1,5 @@
+{
+    "baseUrl": "https://localhost:3001",
+    "chromeWebSecurity": false
+}
+  

@@ -1,0 +1,4 @@
+<http://dapsi.com/gertjandm/services/imgur/myimages/0weA4R5> <http://example.com/imgUrl> "https://i.imgur.com/0weA4R5.png".
+<http://dapsi.com/gertjandm/services/imgur/myimages/0weA4R5> <http://example.com/imgDescription> "The Function Ontology is a way to semantically declare and describe functions, without depending on the implementation.".
+<http://dapsi.com/gertjandm/services/imgur/myimages/kO5Gllm> <http://example.com/imgUrl> "https://i.imgur.com/kO5Gllm.png".
+<http://dapsi.com/gertjandm/services/imgur/myimages/kO5Gllm> <http://example.com/imgDescription> "Knowledge graphs can be generated using any type of semi-structured data. There is support for different formats, such as CSV, JSON, and XML, together with support for different data sources, such as files, databases, Web APIs, and streams.".

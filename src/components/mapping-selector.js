@@ -1,67 +1,37 @@
 import React from 'react';
-import {Form, Container, Row} from 'react-bootstrap';
+import {Form} from 'react-bootstrap';
 
-/**
- * Mapping Selector Component
- */
-class MappingSelector extends React.Component {
 
-    /**
-     *
-     * @param props
-     */
-    constructor(props) {
-        super(props)
-        this.label = props.label
-        this.options = props.options
-        if(props.hasOwnProperty('handleChange')) {
-            console.log("MappingSelector initialized with handleChange in props")
-            this.handleChange = props.handleChange.bind(this)
+
+export default function MappingSelector({ 
+    options,
+    selectedOptionValue,
+    handleChange = f => f}) {
+
+
+    // Creates a JSX element for the given option
+    const renderOption = (option) => {
+            return (
+                <option key={option.value} value={option.value}>{option.label}</option>
+            );
         }
-    }
 
-    /**
-     *
-     * @param e
-     */
-    handleChange(e) {
-        console.log("@MappingSelector.handleChange... e: ", e)
-    }
 
-    /**
-     *
-     * @param option
-     * @returns {JSX.Element}
-     */
-    renderOption(option) {
-        return (
-            <option key={option.value} value={option.value}>{option.label}</option>
-        );
-    }
+    // Render options and keep the default option as the first option.
+    const renderedOptions = options ? options.map(renderOption) : null
 
-    /**
-     *
-     * @returns {JSX.Element}
-     */
-    render(){
-        return (
-            <Container className="mapping-selector">
-                <Row>
-                    <Form>
-                        <Form.Group controlId="exampleForm.SelectCustom">
-                            <Form.Label>{this.label}</Form.Label>
-                            <Form.Control
-                                as="select" custom
-                                onChange={(e)=>{this.handleChange(e)
-                            }}>
-                                {this.options.map(o => this.renderOption(o))}
-                            </Form.Control>
-                        </Form.Group>
-                    </Form>
-                </Row>
-            </Container>
-        );
-    }
-
+    return (
+        <Form >
+                <Form.Group controlId="exampleForm.SelectCustom">
+                    <Form.Control
+                        as="select" custom
+                        value={selectedOptionValue}
+                        onChange={(e)=>{handleChange(e)}}
+                        data-test="mapping-selector"
+                    >
+                        {renderedOptions}
+                    </Form.Control>
+                </Form.Group>
+            </Form>
+    );
 }
-export default MappingSelector;
