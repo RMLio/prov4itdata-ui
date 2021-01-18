@@ -15,4 +15,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- Removed public/rml folder (see [MR](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/merge_requests/3))
+
 ### Removed
