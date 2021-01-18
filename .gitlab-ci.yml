@@ -1,0 +1,62 @@
+# first, install Cypress, then run all tests
+stages:
+  - build
+  - test
+
+# to cache both npm modules and Cypress binary we use environment variables
+# to point at the folders we can list as paths in "cache" job settings
+variables:
+  npm_config_cache: '$CI_PROJECT_DIR/.npm'
+  CYPRESS_CACHE_FOLDER: '$CI_PROJECT_DIR/cache/Cypress'
+
+# cache using branch name
+# https://gitlab.com/help/ci/caching/index.md
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  untracked: true
+  paths:
+    - .yarn/
+    - cache/Cypress
+    - node_modules
+
+# this job installs NPM dependencies and Cypress
+install:
+  image: cypress/browsers:node12.16.2-chrome81-ff75
+  stage: build
+
+  script:
+    - yarn install
+    # check Cypress binary path and cached versions
+    # useful to make sure we are not carrying around old versions
+    - npx cypress cache path
+    - npx cypress cache list
+    #- $(npm bin)/print-env CI
+    - yarn run cypress:verify
+    - yarn run cypress:info
+
+# all jobs that actually run tests can use the same definition
+.job_template:
+  image: cypress/browsers:node12.16.2-chrome81-ff75
+  stage: test
+  script:
+    - sysctl fs.inotify.max_user_watches=524288 # prevent heaps of ENOSPC warnings
+    - yarn install
+    # print CI environment variables for reference
+    #- $(npm bin)/print-env CI
+    # start the server in the background
+    - yarn run start:ci &
+    - yarn run cypress:run --browser chrome --headless
+    # run Cypress test in load balancing mode
+    #- npm run e2e:record -- --parallel --group "electrons on GitLab CI"
+  artifacts:
+    when: always
+    paths:
+      - /builds/rml/util/prov4itdata-dapsi/ui/cypress/videos/*.mp4
+      - /builds/rml/util/prov4itdata-dapsi/ui/cypress/screenshots/*.png
+    expire_in: 7 days
+
+# actual job definitions
+# all steps are the same, they come from the template above
+electrons-1:
+  extends: .job_template
+
