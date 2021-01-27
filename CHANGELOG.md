@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - Transfer view as React component (see [MR](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/merge_requests/1))
 - Integrated Cypress tests (see [MR](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/merge_requests/2))
+- GitLab CI (see [MR](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/merge_requests/5))
 
 ### Changed
 
