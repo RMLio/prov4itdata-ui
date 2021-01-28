@@ -2,12 +2,8 @@ import {Accordion, Button, Card} from "react-bootstrap";
 import React from "react";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import MappingSelector from "./mapping-selector";
+import DownloadButton from './download-button';
 
-function DownloadButton ({onClick, label = 'Download'}){
-    return (
-        <a href="#" onClick={onClick} className="download-link">{label}</a>
-    );
-}
 
 function clientDownload(data, filename){
     // Let the client download the provenance
