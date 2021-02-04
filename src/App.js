@@ -1,116 +1,71 @@
 import './App.css';
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Transfer from "./components/transfer";
-import { Alert } from 'react-bootstrap';
-
-
-async function readAndDecodeBody(response) {
-  // Set up a StreamReader and UTF8 decoder
-  const reader = response.body.getReader()
-  const utf8Decoder = new TextDecoder("utf-8")
-
-  // Read, decode, repeat
-  var { done, value } = await reader.read()
-  var decodedData = utf8Decoder.decode(value)
-
-  // Return decoded data
-  return decodedData
-}
-
-
-/**
- * 
- * @param {*} metaData 
- */
-function createOptionRecordsFromMetaData(mappingMeta) {
-  // Get & flatten the values of the mappingMeta data (keys point to data providers, such as flickr, imgur, ...).
-  // Then, add a 'value'-key to every mapping and set its value to the filename
-  return Object.entries(mappingMeta).flatMap((entry)=>{
-    let [k,records] = entry
-    return records.map((r)=>{return {...r,value:`rml/${k}/${r.filename}`}})
-  })
-}
-
-
-/**
- * Executes POST request to the backend for executing the RML Mapping referred to by urlMapping
- * @param {*} urlMapping : url of the RML Mapping
- */
-async function executeMappingOnBackend(provider, filename, onSuccess = f => f, onError = f => f) {
-  const url = `/rmlmapper/${provider}/${filename}`
-
-  console.log("@executeMappingOnBackend. POST " , url)
-  fetch(url, 
-    {
-      method : 'POST',
-      mode : 'no-cors',
-      headers: {
-        'Content-Type' : 'text/turtle'
-      }
-    })
-    .then(onSuccess)
-    .catch(onError)
-}
-
-async function isProviderConnected(provider) {
-  console.log("@isProviderConnected")
-  const url = `/status/${provider}/connected`
-  const response = await fetch(url, {
-      method : 'GET',
-  })
-
-  if(response.ok){
-    const body = await readAndDecodeBody(response)
-    const status = JSON.parse(body) 
-    return status.connected;
-  }else {
-    console.error("Error: response NOT OK: " , response)
-    return false;
-  }
-}
-
-async function getConnectionUrlForProvider(provider) {
-  console.log("@getConnectionUrlForProvider -- provider: " , provider)
-  const url = `/configuration/${provider}/connect`
-  const response = await fetch(url, {
-      method : 'GET',
-  })
-
-  if(response.ok){
-    const connectData = await readAndDecodeBody(response)
-    return JSON.parse(connectData).url;
-  }else {
-    console.error("Error: response NOT OK: " , response)
-    return null;
-  }
-}
+import {Alert} from 'react-bootstrap';
+import {
+  handleProviderConnection,
+  handleSolidLogin,
+  handleSolidOperation,
+  makeWarningAlert,
+  readAndDecodeBody,
+  createOptionRecordsFromMetaData,
+  executeMappingOnBackend,
+  makeAlert,
+  STORAGE_KEYS,
+  isProviderConnected,
+  getConnectionUrlForProvider, extractProviderFromMappingUrl
+} from "./lib/helpers";
 
 
 
-function makeAlert(variant, body) {
-  return {variant, body}
-}
-
-function makeWarningAlert(body) {
-  return makeAlert('warning', body)
-}
 
 function App() {
- 
+
   let [mappingOptions, setMappingOptions] = useState()
-  let [mapping, setMapping] = useState({content : '', value : null})
-  let [mappingContent, setMappingContent] = useState("")
+  let [mapping, setMapping] = useState( {
+    content : localStorage.getItem(STORAGE_KEYS.MAPPING_CONTENT) || '',
+    value : localStorage.getItem(STORAGE_KEYS.MAPPING_URL)
+  })
+
   let [generatedOutput, setGeneratedOutput] = useState("")
   let [provenance, setProvenance] = useState("")
   let [solidData, setSolidData] = useState("")
-  let [alert, setAlert] = useState()
+  let [alert, _setAlert] = useState()
 
-  const updateMapping = (content, value) => setMapping({content, value})
+  /**
+   * Creates an alert.
+   * @param a
+   * @param alertDuration (optional) time in milliseconds that the alert message will be shown
+   */
+  const setAlert = (a, alertDuration = undefined) => {
+    _setAlert(a)
+    if(alertDuration)
+      setTimeout(()=>_setAlert(""), alertDuration)
+  }
+
+  const updateMapping = (content, value) => {
+    let provider = extractProviderFromMappingUrl(value);
+    // Store in local storage
+    localStorage.setItem(STORAGE_KEYS.MAPPING_URL, value);
+    localStorage.setItem(STORAGE_KEYS.MAPPING_CONTENT, content)
+
+    // Update mapping state
+    setMapping({content, value, provider})
+  }
+
   const clearMapping = () => updateMapping('',null)
 
-  const resetGeneratedOutput = () => setGeneratedOutput("")
-  const resetProvenance = () => setProvenance("")
+  /**
+   * Fetches mapping content & updates mapping state variable
+   * @param url
+   * @returns {Promise<void>}
+   */
+  const updateMappingFromUrl = async (url) => {
+    fetch(url)
+        .then(readAndDecodeBody)
+        .then((data)=> updateMapping(data,url))
+  }
 
   // Default mapping. this is the first option that will be rendered in the mapping selector)
   const defaultMapping = {'value' : 'default', 'label' : 'Select a mapping'}
@@ -119,17 +74,36 @@ function App() {
     setMappingOptions([defaultMapping, ...data])
   }
 
-  // If the mappingOptions aren't initialized yet, fetch & parse the mappings metadata, and
-  // update the mappingOptions
-  // 
-  if(!mappingOptions) {
-    const urlMetaData = "/rml/mappings-metadata.json";
-    fetch(urlMetaData)
-    .then(readAndDecodeBody)
-    .then(JSON.parse)
-    .then(createOptionRecordsFromMetaData)
-    .then(updateMappings)
-  }
+  // Fetch mappings-metadata using side-effects.
+  // This side-effect will be executed only once.
+  useEffect(() => {
+    const fetchMappingsMetadata = async () => {
+      const urlMetaData = "/rml/mappings-metadata.json";
+      let mappingOptions = [];
+
+      try {
+        const response = await fetch(urlMetaData)
+
+        if(response.status !== 200 )
+          throw new Error('Error while getting the RML Mapping metadata...');
+
+        const body = await readAndDecodeBody(response)
+        const optionData = JSON.parse(body)
+        mappingOptions = [...createOptionRecordsFromMetaData(optionData)]
+
+      } catch (e) {
+        console.log(e.message)
+        const errMessage = e.message
+        setAlert(makeWarningAlert(errMessage))
+
+      } finally {
+        updateMappings(mappingOptions)
+      }
+    }
+
+    fetchMappingsMetadata();
+  },[])
+
 
   /**
    * When triggered, the content of the selected mapping will be fetched and the state variable
@@ -141,82 +115,179 @@ function App() {
 
     if(e.target.value !== 'default') {
       // fetch contents and set the state variable mappingContent
-      const url = e.target.value
-      fetch(url)
-          .then(readAndDecodeBody)
-          .then((data)=> {
-            updateMapping(data,url)
-          })
+      updateMappingFromUrl(e.target.value)
     } else
       // When selecting the default option (no mapping), clear the mapping.
       clearMapping()
+  }
+
+  /**
+   * Checks with the backend whether the user is connected with the given provider (i.e. whether the user has already
+   * authorized the app).
+   * @param provider: data provider (e.g. flickr, imgur, ...)
+   * @returns {Promise<void>}
+   */
+  const handleProviderConnection = async (provider) => {
+    console.log('@handleProviderConnection')
+    const providerIsConnected = await isProviderConnected(provider)
+
+    // If provider is not connected, notify the user about it and redirect to the provider's authorization page
+    if(!providerIsConnected) {
+      console.log('provider is not connected --> redirecting!')
+      let connectionUrl = await getConnectionUrlForProvider(provider)
+      // Notify user
+      setAlert(makeAlert('info', (<p>Required to authorize with provider.
+        You will automatically be redirected to the authorization page.
+        Otherwise, if the redirection is being blocked by your browser,
+        you can authorize manually via <a href={connectionUrl}>this link.</a></p>)))
+
+      // Redirect automatically after timeout
+      await setTimeout(()=>{
+        window.location.href = connectionUrl
+      }, 2500)
+    }
   }
 
 
   /**
    * Handler that calls the backend to execute the selected mapping.
    * Upon success, this will result in the generated output and provenance being set.
-   * @param {*} e 
+   * @param {*} e
    */
   const handleOnExecute = async (e)=> {
-    // TODO: handle on execute event
     console.log("@handleOnExecute")
 
+    if(localStorage.getItem(STORAGE_KEYS.EXECUTION_ATTEMPTS)) {
+      let count = parseInt(localStorage.getItem(STORAGE_KEYS.EXECUTION_ATTEMPTS));
+      count++;
+      localStorage.setItem(STORAGE_KEYS.EXECUTION_ATTEMPTS, count.toString());
+    }else {
+      localStorage.setItem(STORAGE_KEYS.EXECUTION_ATTEMPTS, '1');
+    }
 
     if(mapping.value !== null) {
       // Extract provider & filename from e.target.value
       const [, provider, filename] = String(mapping.value).split('/')
 
-      // connected?
+      // Provider connection
       const providerIsConnected = await isProviderConnected(provider)
-      if(providerIsConnected){
-        console.log("provider is connected")
+      if(!providerIsConnected)
+        await handleProviderConnection(provider);
+      else {
+        // Solid connected?
+        let session = await handleSolidLogin();
 
-        // onSuccess callback for execute mapping call
-        const onSuccess = async (response) => {
-          if(response.status === 200){
-            const body = await readAndDecodeBody(response)
-            const jsonData = JSON.parse(body)
-            setGeneratedOutput(jsonData.rdf)
-            setProvenance(jsonData.prov)
-          } else {
-            // TODO: setAlert -- notify user that something went wrong
-            console.error("response was not 200 ")
-            console.error(response)
+        if(session) {
+          // onSuccess callback for execute mapping call
+          const onSuccess = async (response) => {
+            if(response.status === 200){
+              const body = await readAndDecodeBody(response)
+              const jsonData = JSON.parse(body)
+
+              setGeneratedOutput(jsonData.rdf)
+              setProvenance(jsonData.prov)
+
+              // Store the generated RDF onto the user's Solid POD
+              const solidRequestParams = {
+                method : 'PATCH',
+                body : `INSERT DATA {${jsonData.rdf}}`,
+                headers : {
+                  'Content-Type': 'application/sparql-update'
+                }
+              }
+
+              await handleSolidOperation(solidRequestParams, (data)=>{
+                setAlert(makeAlert('info', 'Mapping executed successfully!'), 5000)
+                // Execution was successful so we can clean up the flags in the local storage
+                localStorage.removeItem(STORAGE_KEYS.EXECUTION_ATTEMPTS)
+              }, (err)=>{
+                // Notify the user about any errors
+                setAlert(makeWarningAlert('Error while executing request to Solid pod. Message: ' + e))
+              })
+
+            } else {
+              console.error(response)
+              const errMessage = 'Something went wrong while executing the RML Mapping... ' +
+                  '\n Response status code: ' + response.status;
+
+              setAlert(makeWarningAlert(errMessage))
+            }
           }
+
+          // onError callback for execute mapping call
+          const onError = (response) => {
+            // TODO: handle onError
+            console.error("request was unsuccessful: ", response)
+          }
+
+          // Call backend to execute the selected mapping
+          await executeMappingOnBackend(provider, filename, onSuccess, onError)
         }
-
-        // onError callback for execute mapping call
-        const onError = (response) => {
-          // TODO: handle onError
-          console.error("request was unsuccessful: ", response)
-          
-        }
-
-        // Call backend to execute the selected mapping
-        executeMappingOnBackend(provider, filename, onSuccess, onError)
-
-      }else {
-        // provider is not connected
-        console.log("provider isn't connected yet")
-        let connectionUrl = await getConnectionUrlForProvider(provider)
-        
-        setAlert(makeAlert('info', (<p>Required to authorize with provider. Authorize via <a href={connectionUrl}>this link.</a></p>)))
       }
     }else {
       setAlert(makeAlert('warning', (<p>You need to select a mapping first!</p>)))
     }
   }
 
-  const handleSolidFetch = (e) => {
-      console.log("NotImplemented: handleSolidFetch")
+  /**
+   * Fetches data from Solid Pod.
+   * If the user is not yet logged in to the Solid Pod, the login-popup will appear.
+   *
+   * @param e
+   * @returns {Promise<void>}
+   */
+  const handleSolidFetch = async () => {
+    await handleSolidOperation({method:'GET'},async (response)=>{
+      const body = await readAndDecodeBody(response)
+      setSolidData(body)
+    }, (err)=>{
+      // Notify the user about any errors
+      setAlert(makeWarningAlert('Error while fetching data from Solid pod. Message: ' + err))
+    })
+  }
+
+  /**
+   * Clears the current file on the Solid Pod.
+   * @returns {Promise<void>}
+   */
+  const handleSolidClear = async () => {
+    await handleSolidOperation({
+      solidFetchParams: {method:'DELETE'},
+      onError: (err)=>{
+        // Notify the user about any errors
+        setAlert(makeWarningAlert('Error while clearing data on Solid pod. Message: ' + err))
+      }})
+    setSolidData('')
   }
 
   const handleDownload = (data) => {
     console.log("@handleDownload -- data: " , data)
   }
 
+  const trackSession = async () => {
+    console.log('@trackSession')
+    const ls = localStorage;
+    const sk = STORAGE_KEYS;
+
+    if(ls.getItem(sk.EXECUTION_ATTEMPTS)) {
+      // if execution was initiated, handle the execution
+      const executionAttemptCount = parseInt(ls.getItem(sk.EXECUTION_ATTEMPTS))
+      console.log('execution attempts: '  ,executionAttemptCount)
+      const MAX_EXECUTION_ATTEMPTS = 3
+      if(executionAttemptCount < MAX_EXECUTION_ATTEMPTS)
+        await handleOnExecute()
+      else {
+        setAlert(makeWarningAlert('Maximum execution attempts exceeded...'))
+        ls.removeItem(sk.EXECUTION_ATTEMPTS)
+      }
+    }
+  }
+
   const renderedAlert = alert ? <Alert variant={alert.variant} data-test="alert-box">{alert.body}</Alert> : null;
+
+  useEffect(()=>{
+    trackSession()
+  }, [mapping])
 
   return (
     <div className="App container">
@@ -225,12 +296,14 @@ function App() {
       <Transfer
           mappings={mappingOptions}
           mappingContent={mapping.content}
+          selectedOptionValue={mapping.value}
           generatedOutput={generatedOutput}
           provenance={provenance}
           solidData={solidData}
           handleOnExecute={handleOnExecute}
           handleOnMappingChange={handleOnMappingChange}
           handleSolidFetch={handleSolidFetch}
+          handleSolidClear={handleSolidClear}
           handleDownload={handleDownload}
           data-cy="transfercomp"
       >

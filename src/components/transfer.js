@@ -17,6 +17,7 @@ function clientDownload(data, filename){
 }
 
 export default function Transfer({mappings,
+                                     selectedOptionValue,
                                      mappingContent,
                                      generatedOutput,
                                      provenance,
@@ -29,8 +30,8 @@ export default function Transfer({mappings,
                                     }
                                      ) {
 
-    const btnDownloadRMLMapping = 
-        (<DownloadButton 
+    const btnDownloadRMLMapping =
+        (<DownloadButton
             data-test="download-rml-mapping"
             onClick={(e) => {
                 console.log("clicked download RML Mapping")
@@ -39,7 +40,7 @@ export default function Transfer({mappings,
 
         </DownloadButton>)
 
-    const btnDownloadGeneratedOutput = 
+    const btnDownloadGeneratedOutput =
         (<DownloadButton
             data-test="download-generated-output"
             onClick={(e) => {
@@ -49,8 +50,8 @@ export default function Transfer({mappings,
 
         </DownloadButton>)
 
-    const btnDownloadProvenance = 
-    (<DownloadButton 
+    const btnDownloadProvenance =
+    (<DownloadButton
         data-test="download-provenance"
         onClick={(e) => {
             console.log("clicked download Provenance ")
@@ -58,7 +59,7 @@ export default function Transfer({mappings,
         }}>
 
     </DownloadButton>)
-                                        
+
     return (
         <div data-test="transfer">
             <Accordion defaultActiveKey="0">
@@ -72,10 +73,11 @@ export default function Transfer({mappings,
                         <Card.Body>
                             <MappingSelector
                                 options={mappings}
+                                selectedOptionValue={selectedOptionValue}
                                 handleChange={(e)=>{
                                     handleOnMappingChange(e)
                                 }}
-                                
+
                             />
 
                             <Button onClick={(e)=>handleOnExecute(e)} data-test="execute-mapping">Execute</Button>
@@ -92,7 +94,7 @@ export default function Transfer({mappings,
                     </Card.Header>
                     <Accordion.Collapse eventKey="1">
                         <Card.Body>
-                            
+
                             <SyntaxHighlighter
                                 language="turtle"
                                 wrapLines={true}
@@ -150,7 +152,7 @@ export default function Transfer({mappings,
                         </Accordion.Toggle>
                     </Card.Header>
                     <Accordion.Collapse eventKey="4">
-                        
+
                         <Card.Body>
                             <Button data-test="button-solid-fetch" onClick={(e)=>handleSolidFetch(e)}>Fetch</Button>
                             <Button data-test="button-solid-clear" onClick={(e)=>handleSolidClear(e)}>Clear</Button>

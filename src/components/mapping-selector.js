@@ -3,7 +3,7 @@ import {Form} from 'react-bootstrap';
 
 
 
-export default function MappingSelector({ 
+export default function MappingSelector({
     options,
     selectedOptionValue,
     handleChange = f => f}) {
@@ -25,7 +25,7 @@ export default function MappingSelector({
                 <Form.Group controlId="exampleForm.SelectCustom">
                     <Form.Control
                         as="select" custom
-                        value={selectedOptionValue}
+                        value={selectedOptionValue?selectedOptionValue:undefined}
                         onChange={(e)=>{handleChange(e)}}
                         data-test="mapping-selector"
                     >
