@@ -182,29 +182,37 @@ function App() {
           // onSuccess callback for execute mapping call
           const onSuccess = async (response) => {
             if(response.status === 200){
-              const body = await readAndDecodeBody(response)
-              const jsonData = JSON.parse(body)
+              try {
+                const body = await readAndDecodeBody(response)
+                const jsonData = JSON.parse(body)
 
-              setGeneratedOutput(jsonData.rdf)
-              setProvenance(jsonData.prov)
+                setGeneratedOutput(jsonData.rdf)
+                setProvenance(jsonData.prov)
 
-              // Store the generated RDF onto the user's Solid POD
-              const solidRequestParams = {
-                method : 'PATCH',
-                body : `INSERT DATA {${jsonData.rdf}}`,
-                headers : {
-                  'Content-Type': 'application/sparql-update'
+                // Store the generated RDF onto the user's Solid POD
+                const solidRequestParams = {
+                  method : 'PATCH',
+                  body : `INSERT DATA {${jsonData.rdf}}`,
+                  headers : {
+                    'Content-Type': 'application/sparql-update'
+                  }
                 }
-              }
 
-              await handleSolidOperation(solidRequestParams, (data)=>{
-                setAlert(makeAlert('info', 'Mapping executed successfully!'), 5000)
-                // Execution was successful so we can clean up the flags in the local storage
-                localStorage.removeItem(STORAGE_KEYS.EXECUTION_ATTEMPTS)
-              }, (err)=>{
-                // Notify the user about any errors
-                setAlert(makeWarningAlert('Error while executing request to Solid pod. Message: ' + e))
-              })
+                await handleSolidOperation(solidRequestParams, (data)=>{
+                  setAlert(makeAlert('info', 'Mapping executed successfully!'), 5000)
+                  // Execution was successful so we can clean up the flags in the local storage
+                  localStorage.removeItem(STORAGE_KEYS.EXECUTION_ATTEMPTS)
+                }, (err)=>{
+                  // Notify the user about any errors
+                  setAlert(makeWarningAlert('Error while executing request to Solid pod. Message: ' + e))
+                })
+
+              }
+              catch (e) {
+                const errMsg = `Error while processing result from RMLMapper. \n Error message: ${e}`
+                console.error(errMsg)
+                setAlert(makeWarningAlert(errMsg))
+              }
 
             } else {
               console.error(response)
