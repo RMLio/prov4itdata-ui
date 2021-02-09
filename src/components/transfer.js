@@ -26,7 +26,9 @@ export default function Transfer({mappings,
                                      handleOnExecute = f => f,
                                      handleSolidFetch = f => f,
                                      handleSolidClear = f => f,
-                                     handleDownload = f => f
+                                     handleSolidLogout = f => f,
+                                     handleDownload = f => f,
+                                     children
                                     }
                                      ) {
 
@@ -156,6 +158,7 @@ export default function Transfer({mappings,
                         <Card.Body>
                             <Button data-test="button-solid-fetch" onClick={(e)=>handleSolidFetch(e)}>Fetch</Button>
                             <Button data-test="button-solid-clear" onClick={(e)=>handleSolidClear(e)}>Clear</Button>
+                            <Button data-test="button-solid-logout" onClick={(e)=>handleSolidLogout(e)}>Logout</Button>
                             <SyntaxHighlighter
                                 language="turtle"
                                 wrapLines={true}
@@ -165,6 +168,8 @@ export default function Transfer({mappings,
                         </Card.Body>
                     </Accordion.Collapse>
                 </Card>
+
+                {children}
 
             </Accordion>
         </div>);

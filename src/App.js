@@ -1,8 +1,8 @@
 import './App.css';
-import {useEffect, useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Transfer from "./components/transfer";
-import {Alert} from 'react-bootstrap';
+import {Alert, Button, Card} from 'react-bootstrap';
 import {
   handleProviderConnection,
   handleSolidLogin,
@@ -14,8 +14,9 @@ import {
   makeAlert,
   STORAGE_KEYS,
   isProviderConnected,
-  getConnectionUrlForProvider, extractProviderFromMappingUrl
+  getConnectionUrlForProvider, extractProviderFromMappingUrl, handleSolidLogout, handleLogout
 } from "./lib/helpers";
+import CollapsibleCard from "./components/collapsible-card";
 
 
 
@@ -289,6 +290,28 @@ function App() {
     trackSession()
   }, [mapping])
 
+
+  // Settings card that will be added as a child to the Transfer component
+  const settingsCard = (
+      <CollapsibleCard header="Settings" headerId="card-header-settings">
+        <Button data-test="button-logout"
+            onClick={
+              async ()=>{
+                await handleLogout(
+                  () => {
+                    // Clear local storage
+                    localStorage.clear();
+                    // Clear cookies 🍪
+                    document.cookie = ''
+                    // Notify user about successful log out
+                    setAlert(makeAlert('info', 'Successfully logged out'))
+                  },
+                  () => setAlert(makeWarningAlert('Error when logging out')))}
+            }>
+          Log out
+        </Button>
+      </CollapsibleCard>)
+
   return (
     <div className="App container">
       <h1>PROV4ITDaTa-DAPSI</h1>
@@ -304,9 +327,11 @@ function App() {
           handleOnMappingChange={handleOnMappingChange}
           handleSolidFetch={handleSolidFetch}
           handleSolidClear={handleSolidClear}
+          handleSolidLogout={handleSolidLogout}
           handleDownload={handleDownload}
           data-cy="transfercomp"
       >
+        {settingsCard}
       </Transfer>
     </div>
   );

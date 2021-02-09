@@ -6,6 +6,14 @@ export const STORAGE_KEYS = {
     EXECUTION_ATTEMPTS: 'EXECUTE_ATTEMPTS'
 }
 
+export const handleSolidLogout = async () =>  {
+    console.log('@handleSolidLogout')
+    try {
+        await auth.logout();
+    }catch (e) {
+        console.error('Error while logging out from Solid')
+    }
+}
 export const handleSolidLogin = async () => {
     let session = await auth.currentSession();
 
@@ -201,4 +209,22 @@ export const extractProviderFromMappingUrl = (mappingUrl) => {
         return provider;
     } else
         throw 'Cannot extract provider from mappingUrl!'
+}
+
+export const handleResponse = (response, onSuccess, onError) =>  {
+    if(response.status === 200)
+        onSuccess(response)
+    else
+        onError(response)
+}
+
+/**
+ * Executes POST request to /logout endpoint on backend.
+ * @param onSuccess: callback
+ * @param onError: callback
+ * @returns {Promise<void>}
+ */
+export const handleLogout = async (onSuccess, onError) =>  {
+    const response = await fetch('/logout', {method:'POST'})
+    handleResponse(response, onSuccess, onError)
 }

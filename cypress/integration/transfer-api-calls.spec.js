@@ -117,4 +117,23 @@ describe('Transfer Component API calls', () => {
       // TODO: assert that a GET call to /configuration/<provider>/solid is made
 
     })
+
+    it('Clicking Disconnect Providers should make the appropriate POST call', () => {
+
+        // Intercept POST calls to /logout endpoint
+        cy.intercept('/logout', {
+            statusCode: 200
+        }).as('postCallLogout')
+
+        // Find & expand the Settings card
+        cy.get('[data-test=card-header-settings]')
+            .click()
+            .log('Expanded Settings card')
+
+        // Click the button for logging out the data providers and assert that the POST call has been made
+        cy.get('[data-test=button-logout]')
+            .click()
+            .wait('@postCallLogout')
+    })
+    
 })
