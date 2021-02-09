@@ -182,36 +182,58 @@ function App() {
           // onSuccess callback for execute mapping call
           const onSuccess = async (response) => {
             if(response.status === 200){
+
+              let jsonData = null;
+
               try {
                 const body = await readAndDecodeBody(response)
-                const jsonData = JSON.parse(body)
-
-                setGeneratedOutput(jsonData.rdf)
-                setProvenance(jsonData.prov)
-
-                // Store the generated RDF onto the user's Solid POD
-                const solidRequestParams = {
-                  method : 'PATCH',
-                  body : `INSERT DATA {${jsonData.rdf}}`,
-                  headers : {
-                    'Content-Type': 'application/sparql-update'
-                  }
-                }
-
-                await handleSolidOperation(solidRequestParams, (data)=>{
-                  setAlert(makeAlert('info', 'Mapping executed successfully!'), 5000)
-                  // Execution was successful so we can clean up the flags in the local storage
-                  localStorage.removeItem(STORAGE_KEYS.EXECUTION_ATTEMPTS)
-                }, (err)=>{
-                  // Notify the user about any errors
-                  setAlert(makeWarningAlert('Error while executing request to Solid pod. Message: ' + e))
-                })
-
-              }
-              catch (e) {
+                jsonData = JSON.parse(body)
+              } catch (e) {
                 const errMsg = `Error while processing result from RMLMapper. \n Error message: ${e}`
                 console.error(errMsg)
                 setAlert(makeWarningAlert(errMsg))
+              }
+
+              if(jsonData) {
+                let alertMessages = []
+
+                // Do we have RDF data?
+                if (jsonData.rdf && Object.keys(jsonData.rdf).length)
+                  setGeneratedOutput(jsonData.rdf)
+                else
+                  alertMessages.push('Generated RDF data is empty')
+
+                // Do we have prov data?
+                if(jsonData.prov && Object.keys(jsonData.prov).length)
+                  setProvenance(jsonData.prov)
+                else
+                  alertMessages.push('Provenance data is empty')
+
+                // If there are any messages, notify the user about them
+                if(alertMessages.length)
+                  setAlert(makeWarningAlert(alertMessages.join('\n')))
+                else {
+                  // No alert messages? That means we have both RDF & Provenance data, and we can push to Solid
+                  // TODO: refactor solid stuff to separate lib
+                  // Store the generated RDF onto the user's Solid POD
+                  const solidRequestParams = {
+                    method : 'PATCH',
+                    body : `INSERT DATA {${jsonData.rdf}}`,
+                    headers : {
+                      'Content-Type': 'application/sparql-update'
+                    }
+                  }
+
+                  await handleSolidOperation(solidRequestParams, (data)=>{
+                    setAlert(makeAlert('info', 'Mapping executed successfully!'), 5000)
+                    // Execution was successful so we can clean up the flags in the local storage
+                    localStorage.removeItem(STORAGE_KEYS.EXECUTION_ATTEMPTS)
+                  }, (err)=>{
+                    // Notify the user about any errors
+                    setAlert(makeWarningAlert('Error while executing request to Solid pod. Message: ' + e))
+                  })
+
+                }
               }
 
             } else {
