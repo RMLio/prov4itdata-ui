@@ -6,6 +6,10 @@ export const STORAGE_KEYS = {
     EXECUTION_ATTEMPTS: 'EXECUTE_ATTEMPTS'
 }
 
+export const MIME_TYPES = {
+    APPLICATION_JSON: 'application/json'
+}
+
 export const handleSolidLogout = async () =>  {
     console.log('@handleSolidLogout')
     try {
@@ -14,6 +18,7 @@ export const handleSolidLogout = async () =>  {
         console.error('Error while logging out from Solid')
     }
 }
+
 export const handleSolidLogin = async () => {
     let session = await auth.currentSession();
 
@@ -69,6 +74,11 @@ export const handleSolidOperation = async (solidFetchParams, onSuccess, onError)
     }
 }
 
+/**
+ * Reads response as a stream & return decoded result.
+ * @param response
+ * @returns {Promise<string>}
+ */
 export async function readAndDecodeBody(response) {
     // Set up a StreamReader and UTF8 decoder
     const reader = response.body.getReader()
@@ -127,18 +137,43 @@ export async function executeMappingOnBackend(provider, filename, onSuccess = f 
 export async function isProviderConnected(provider) {
     console.log("@isProviderConnected")
     const url = `/status/${provider}/connected`
-    const response = await fetch(url, {
-        method: 'GET',
-    })
 
-    if (response.ok && response.status === 200) {
-        const body = await readAndDecodeBody(response)
-        const status = JSON.parse(body)
-        return status.connected;
-    } else {
-        console.error("Error: response NOT OK: ", response)
-        return false;
+    let isConnected = false;
+
+    const parsedResponse = await tryParseJsonResponse(await fetch(url))
+    if (parsedResponse.success && parsedResponse.body.hasOwnProperty('connected'))
+        isConnected = parsedResponse.body.connected
+    else
+        console.error('Error while processing response body. Error: ', parsedResponse.reason)
+
+    return isConnected
+}
+
+/**
+ * Try to parse
+ * @param input
+ * @param options
+ * @returns {Promise<{success: boolean, body: any}|{reason, success: boolean}>}
+ */
+export async function tryParseJsonResponse(response) {
+    console.log('@tryParseJsonResponse (url: ', response.url);
+
+    let result = {}
+    try {
+        const body = await response.json()
+        result = {...result,
+            success: true,
+            body
+        }
+    } catch (err) {
+        // Add error message as reason to the result
+        result = {...result,
+            success: false,
+            reason: err.message
+        }
     }
+
+    return result
 }
 
 /**
@@ -150,16 +185,23 @@ export async function getConnectionUrlForProvider(provider) {
     console.log("@getConnectionUrlForProvider -- provider: ", provider)
     const url = `/configuration/${provider}/connect`
     const response = await fetch(url, {
-        method: 'GET',
+        headers: {
+            'Content-Type': MIME_TYPES.APPLICATION_JSON
+        }
     })
 
-    if (response.ok && response.status === 200) {
-        const connectData = await readAndDecodeBody(response)
-        return JSON.parse(connectData).url;
-    } else {
-        console.error("Error: response NOT OK: ", response)
-        return null;
+    // Parse JSON response
+    const parsedResponse = await tryParseJsonResponse(response)
+
+    let connectionUrl = null
+    // If the response was successful, and it contains a body object with an url, return that url.
+    if (parsedResponse.success && parsedResponse.body && parsedResponse.body.hasOwnProperty('url'))
+        connectionUrl = parsedResponse.body.url
+    else {
+        console.error('Error while getting the connection url')
     }
+
+    return connectionUrl
 }
 
 /**
@@ -170,19 +212,19 @@ export async function getConnectionUrlForProvider(provider) {
 export async function getSolidConfiguration(provider) {
     const url = `/configuration/${provider}/solid`
     const response = await fetch(url, {
-        method: 'GET',
         headers: {
             'Content-Type': 'application/json'
         }
     })
 
-    if (response.ok) {
-        const conf = await readAndDecodeBody(response)
-        return JSON.parse(conf);
-    } else {
-        console.error("Error: response NOT OK: ", response)
-        return null;
+    const parsedResponse = await tryParseJsonResponse(response)
+    let solidConfiguration = null
+    if(parsedResponse.success)
+        solidConfiguration = parsedResponse.body
+    else {
+        console.error('Erorr while parsing Solid Configuration. Reason: ', parsedResponse.reason)
     }
+    return solidConfiguration
 }
 
 
@@ -211,12 +253,6 @@ export const extractProviderFromMappingUrl = (mappingUrl) => {
         throw 'Cannot extract provider from mappingUrl!'
 }
 
-export const handleResponse = (response, onSuccess, onError) =>  {
-    if(response.status === 200)
-        onSuccess(response)
-    else
-        onError(response)
-}
 
 /**
  * Executes POST request to /logout endpoint on backend.
@@ -224,7 +260,9 @@ export const handleResponse = (response, onSuccess, onError) =>  {
  * @param onError: callback
  * @returns {Promise<void>}
  */
-export const handleLogout = async (onSuccess, onError) =>  {
-    const response = await fetch('/logout', {method:'POST'})
-    handleResponse(response, onSuccess, onError)
+export const handleLogout = async (processBody, onError) => {
+    const response = await fetch('/logout', {method: 'POST'})
+    const parsedResponse = await tryParseJsonResponse(response)
+    if (!parsedResponse.success)
+        onError(parsedResponse.reason)
 }
