@@ -38,4 +38,16 @@ export const queryRecords = {
                     ?s a schema:ImageGallery . 
                 }`
         },
+    "construct_schema_description_resources": {
+        "description" : "Construct schema:description resources",
+        "query":
+            `
+            # Find resources with a schema:description and output them as triples.
+            PREFIX schema: <http://schema.org/> 
+            
+            CONSTRUCT { ?s schema:description ?d . } WHERE { 
+                ?s schema:description ?d . 
+            }
+            `
+    }
 }
