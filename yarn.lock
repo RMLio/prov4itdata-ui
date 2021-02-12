@@ -5507,16 +5507,6 @@ damerau-levenshtein@^1.0.6:
   resolved "https://registry.yarnpkg.com/damerau-levenshtein/-/damerau-levenshtein-1.0.6.tgz#143c1641cb3d85c60c32329e26899adea8701791"
   integrity sha512-JVrozIeElnj3QzfUIt8tB8YMluBJom4Vw9qTPpjGYQ9fYlB3D/rb6OordUxf3xeFB35LKWs0xqcO5U6ySvBtug==
 
-"dapsi-query@git+ssh://git@gitlab.ilabt.imec.be:prov4itdata-dapsi/dapsi-query.git#expose":
-  version "1.0.0"
-  resolved "git+ssh://git@gitlab.ilabt.imec.be:prov4itdata-dapsi/dapsi-query.git#6d5fe7040fdc8766b66764f4be961e534fe87188"
-  dependencies:
-    "@comunica/actor-http-solid-auth-fetch" "^1.0.1"
-    "@comunica/actor-init-sparql" "^1.18.1"
-    buffer "^6.0.3"
-    process "^0.11.10"
-    stream "^0.0.2"
-
 dashdash@^1.12.0:
   version "1.14.1"
   resolved "https://registry.yarnpkg.com/dashdash/-/dashdash-1.14.1.tgz#853cfa0f7cbe2fed5de20326b8dd581035f6e2f0"
@@ -11123,6 +11113,17 @@ property-information@^5.0.0:
   dependencies:
     xtend "^4.0.0"
 
+prov4itdata-query-engine@^0.1.0:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/prov4itdata-query-engine/-/prov4itdata-query-engine-0.1.0.tgz#103696d23b3d7644443f67c49950557b37456844"
+  integrity sha512-DFWdY+fvxOPtvjUJHPh96BbuLGHUqiFzokGUZTvgshMAG8TKjh09VZaDPc4MhOWsb51SeVsFBAXCFjc3YHe3fQ==
+  dependencies:
+    "@comunica/actor-http-solid-auth-fetch" "^1.0.1"
+    "@comunica/actor-init-sparql" "^1.18.1"
+    buffer "^6.0.3"
+    process "^0.11.10"
+    stream "^0.0.2"
+
 proxy-addr@~2.0.5:
   version "2.0.6"
   resolved "https://registry.yarnpkg.com/proxy-addr/-/proxy-addr-2.0.6.tgz#fdc2336505447d3f2f2c638ed272caf614bbb2bf"
@@ -13357,6 +13358,11 @@ ts-pnp@1.2.0, ts-pnp@^1.1.6:
   version "1.2.0"
   resolved "https://registry.yarnpkg.com/ts-pnp/-/ts-pnp-1.2.0.tgz#a500ad084b0798f1c3071af391e65912c86bca92"
   integrity sha512-csd+vJOb/gkzvcCHgTGSChYpy5f1/XKNsmvBGO4JXS+z1v2HobugDz4s1IeFXM3wZB44uczs+eazB5Q/ccdhQw==
+
+tsc@^1.20150623.0:
+  version "1.20150623.0"
+  resolved "https://registry.yarnpkg.com/tsc/-/tsc-1.20150623.0.tgz#4ebc3c774e169148cbc768a7342533f082c7a6e5"
+  integrity sha1-Trw8d04WkUjLx2inNCUz8ILHpuU=
 
 tsconfig-paths@^3.9.0:
   version "3.9.0"
