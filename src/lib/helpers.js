@@ -267,35 +267,31 @@ export const handleLogout = async (processBody, onError) => {
         onError(parsedResponse.reason)
 }
 
-export const handleQuery = async (engine, query) => {
+export const handleQuery = async (engine, query, onResult = f => f, getSources = f => f) => {
 
     const s = await auth.currentSession();
 
     if(s) {
 
-        // Set up the urls
-        const webId = new URL(s.webId)
-        const origin = webId.origin
-        const privateDir = `${origin}/private`
-        const imgurTtl = `${privateDir}/imgur.ttl`
-        const flickrTtl = `${privateDir}/flickr.ttl`
-        const googleTtl = `${privateDir}/google.ttl`
-
         const params = {
-            sources: [
-                imgurTtl, flickrTtl, googleTtl
-            ]
+            sources: getSources(s) // use getSources callback to get the sources based on the given Solid session
         }
-        // console.log('q: ' , q)
         console.log('params: ', params)
+
+        // Execute query
         const queryResult = await engine.query(query, params)
 
-        console.log('awaited query Result')
-        queryResult.bindingsStream.on('data', (binding) => {
-            console.log('BINDING ARRIVED!', binding)
-            console.log('?s: ', binding.get('?s').value)
-        })
+        // Are we dealing with a quadStream? (CONSTRUCT)
+        if(queryResult.quadStream) {
+            console.log('we have a quadStream')
+            queryResult.quadStream.addListener('data', onResult)
+        }
 
+        // Are we dealing with a bindingsStream (SELECT)
+        if(queryResult.bindingsStream) {
+            console.log('we have a bindingsStream')
+            queryResult.bindingsStream.addListener('data', onResult)
+        }
 
     }else {
         console.log('NOT LOGGED IN TO SOLID... CANT QUERY !')
