@@ -267,7 +267,7 @@ export const handleLogout = async (processBody, onError) => {
         onError(parsedResponse.reason)
 }
 
-export const handleQuery = async (engine, query, onResult = f => f, getSources = f => f) => {
+export const handleQuery = async (engine, query, getSources = f => f) => {
 
     const s = await auth.currentSession();
 
@@ -278,20 +278,10 @@ export const handleQuery = async (engine, query, onResult = f => f, getSources =
         }
         console.log('params: ', params)
 
-        // Execute query
-        const queryResult = await engine.query(query, params)
+        // Execute query & return promise to query result
+        return await engine.query(query, params)
 
-        // Are we dealing with a quadStream? (CONSTRUCT)
-        if(queryResult.quadStream) {
-            console.log('we have a quadStream')
-            queryResult.quadStream.addListener('data', onResult)
-        }
 
-        // Are we dealing with a bindingsStream (SELECT)
-        if(queryResult.bindingsStream) {
-            console.log('we have a bindingsStream')
-            queryResult.bindingsStream.addListener('data', onResult)
-        }
 
     }else {
         console.log('NOT LOGGED IN TO SOLID... CANT QUERY !')

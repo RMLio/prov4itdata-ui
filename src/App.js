@@ -356,10 +356,7 @@ function App() {
           return ( <Button
               onClick={
                 async ()=>{
-                  const onResult = (x) => {
-                    console.log('onResult callback receives: ' )
 
-                  }
                   // getSources extracts the origin from the logged in user's webId and
                   // adds extra sources based on the origin
                   const getSources = (s) => {
@@ -376,7 +373,49 @@ function App() {
 
                     return [s0,...extraSources]
                   }
-                  await handleQuery(engine, qRecord.query, onResult, getSources)
+                  const queryResult = await handleQuery(engine, qRecord.query, getSources)
+
+
+                  /////////////////////////////////////////////////////////////////////
+                  // Handle the results
+
+                  const option01 =async () => {
+                    console.log('option01 result')
+                    const completeResult = await engine.resultToString(queryResult,'text/turtle')
+                    console.log('complete result awaited')
+                  }
+
+
+                  const option02 = async () => {
+                    const onResult = (x) => {
+                      console.log('onResult callback receives: ' )
+
+                    }
+                    // Are we dealing with a quadStream? (CONSTRUCT)
+                    if(queryResult.quadStream) {
+                      console.log('we have a quadStream')
+                      queryResult.quadStream.addListener('data', onResult)
+                    }
+
+                    // Are we dealing with a bindingsStream (SELECT)
+                    if(queryResult.bindingsStream) {
+                      console.log('we have a bindingsStream')
+                      queryResult.bindingsStream.addListener('data', onResult)
+                    }
+                  }
+
+                  // option 1: await entire result (can induce performance issues)
+                  // option01();
+                  /**
+                   * Error:
+                   * Actor https://linkedsoftwaredependencies.org/bundles/npm/@comunica/actor-init-sparql/^1.0.0/config/sets/sparql-serializers.json#myRdfSparqlSerializer can only handle quad streams
+                   */
+
+
+                  // option 2: individual results
+                  // option02()
+
+
                 }
               }>
             {qRecord.description}
