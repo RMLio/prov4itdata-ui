@@ -2,20 +2,22 @@ import './App.css';
 import React, {useEffect, useState} from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Transfer from "./components/transfer";
-import {Alert, Button, Card} from 'react-bootstrap';
+import {Alert, Button} from 'react-bootstrap';
 import {
-  handleProviderConnection,
-  handleSolidLogin,
-  handleSolidOperation,
-  makeWarningAlert,
-  readAndDecodeBody,
   createOptionRecordsFromMetaData,
   executeMappingOnBackend,
-  makeAlert,
-  STORAGE_KEYS,
+  extractProviderFromMappingUrl,
+  getConnectionUrlForProvider,
+  handleLogout,
+  handleQuery,
+  handleSolidLogin,
+  handleSolidLogout,
+  handleSolidOperation,
   isProviderConnected,
-  getConnectionUrlForProvider, extractProviderFromMappingUrl, handleSolidLogout, handleLogout,
-    handleQuery
+  makeAlert,
+  makeWarningAlert,
+  readAndDecodeBody,
+  STORAGE_KEYS
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
 import {queryRecords} from "./lib/queries";
@@ -354,8 +356,27 @@ function App() {
           return ( <Button
               onClick={
                 async ()=>{
+                  const onResult = (x) => {
+                    console.log('onResult callback receives: ' )
 
-                  await handleQuery(engine, qRecord.query)
+                  }
+                  // getSources extracts the origin from the logged in user's webId and
+                  // adds extra sources based on the origin
+                  const getSources = (s) => {
+
+                    // Source 0
+                    const s0 = new URL(s.webId).origin
+                    // Additional sources
+                    const extraSources = [
+                        `${s0}/private`,
+                      `${s0}/private/imgur.ttl`,
+                      `${s0}/private/flickr.ttl`,
+                      `${s0}/private/google.ttl`,
+                    ]
+
+                    return [s0,...extraSources]
+                  }
+                  await handleQuery(engine, qRecord.query, onResult, getSources)
                 }
               }>
             {qRecord.description}
@@ -373,6 +394,8 @@ function App() {
     </>
 
   </CollapsibleCard>)
+
+
 
   return (
     <div className="App container">
