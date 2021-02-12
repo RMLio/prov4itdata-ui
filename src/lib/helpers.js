@@ -266,3 +266,40 @@ export const handleLogout = async (processBody, onError) => {
     if (!parsedResponse.success)
         onError(parsedResponse.reason)
 }
+
+export const handleQuery = async (engine, query) => {
+
+    const s = await auth.currentSession();
+
+    if(s) {
+
+        // Set up the urls
+        const webId = new URL(s.webId)
+        const origin = webId.origin
+        const privateDir = `${origin}/private`
+        const imgurTtl = `${privateDir}/imgur.ttl`
+        const flickrTtl = `${privateDir}/flickr.ttl`
+        const googleTtl = `${privateDir}/google.ttl`
+
+        const params = {
+            sources: [
+                imgurTtl, flickrTtl, googleTtl
+            ]
+        }
+        // console.log('q: ' , q)
+        console.log('params: ', params)
+        const queryResult = await engine.query(query, params)
+
+        console.log('awaited query Result')
+        queryResult.bindingsStream.on('data', (binding) => {
+            console.log('BINDING ARRIVED!', binding)
+            console.log('?s: ', binding.get('?s').value)
+        })
+
+
+    }else {
+        console.log('NOT LOGGED IN TO SOLID... CANT QUERY !')
+        await handleSolidLogin()
+    }
+
+}

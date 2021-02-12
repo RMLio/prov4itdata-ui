@@ -14,12 +14,12 @@ import {
   makeAlert,
   STORAGE_KEYS,
   isProviderConnected,
-  getConnectionUrlForProvider, extractProviderFromMappingUrl, handleSolidLogout, handleLogout
+  getConnectionUrlForProvider, extractProviderFromMappingUrl, handleSolidLogout, handleLogout,
+    handleQuery
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
-
-
-
+import {queryRecords} from "./lib/queries";
+import {newEngine} from "prov4itdata-query-engine";
 
 function App() {
 
@@ -342,6 +342,38 @@ function App() {
         </Button>
       </CollapsibleCard>)
 
+
+  // QUERY STUFF
+  const engine = newEngine();
+
+  const queryCard = ( <CollapsibleCard header="Query" headerId="card-header-query">
+    <>
+      {
+        Object.entries(queryRecords).map(([qId,qRecord])=>{
+
+          return ( <Button
+              onClick={
+                async ()=>{
+
+                  await handleQuery(engine, qRecord.query)
+                }
+              }>
+            {qRecord.description}
+          </Button>    )  })
+      }
+      <Button
+          onClick={
+            async ()=>{
+
+              await handleSolidLogin()
+            }
+          }>
+        SOLID LOGIN
+      </Button>
+    </>
+
+  </CollapsibleCard>)
+
   return (
     <div className="App container">
       <h1>PROV4ITDaTa-DAPSI</h1>
@@ -362,6 +394,7 @@ function App() {
           data-cy="transfercomp"
       >
         {settingsCard}
+        {queryCard}
       </Transfer>
     </div>
   );
