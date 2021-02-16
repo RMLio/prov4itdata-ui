@@ -3,7 +3,8 @@ import auth from "solid-auth-client";
 export const STORAGE_KEYS = {
     MAPPING_CONTENT: 'MAPPING_CONTENT',
     MAPPING_URL: 'MAPPING_URL',
-    EXECUTION_ATTEMPTS: 'EXECUTE_ATTEMPTS'
+    EXECUTION_ATTEMPTS: 'EXECUTE_ATTEMPTS',
+    QUERY_RESULT: 'QUERY_RESULT'
 }
 
 export const MIME_TYPES = {
@@ -267,14 +268,14 @@ export const handleLogout = async (processBody, onError) => {
         onError(parsedResponse.reason)
 }
 
-export const handleQuery = async (engine, query, getSources = f => f) => {
+export const handleQuery = async (engine, query, sources) => {
 
     const s = await auth.currentSession();
 
     if(s) {
 
         const params = {
-            sources: getSources(s) // use getSources callback to get the sources based on the given Solid session
+            sources
         }
         console.log('params: ', params)
 
@@ -286,6 +287,43 @@ export const handleQuery = async (engine, query, getSources = f => f) => {
     }else {
         console.log('NOT LOGGED IN TO SOLID... CANT QUERY !')
         await handleSolidLogin()
+    }
+
+}
+
+
+export const runQuery = async (engine, query, onResult)=>{
+
+    // getSources extracts the origin from the logged in user's webId and
+    // adds extra sources based on the origin
+    const solidSession = await auth.currentSession()
+    // Source 0
+    const s0 = new URL(solidSession.webId).origin
+    // Additional sources
+    const extraSources = [
+        `${s0}/private`,
+        `${s0}/private/imgur.ttl`,
+        `${s0}/private/flickr.ttl`,
+        `${s0}/private/google.ttl`,
+    ]
+
+    const sources =  [s0,...extraSources]
+    const queryResult = await handleQuery(engine, query, sources)
+
+    if(queryResult) {
+        console.log('result to string')
+        const resultStream = await engine.resultToString(queryResult)
+        resultStream.data.setEncoding('utf-8')
+        let chunks = []
+        resultStream.data.on('data', (chunk)=> {
+            chunks.push(chunk)
+        })
+
+        resultStream.data.on('end', ()=>{
+            console.log('resultString end -event')
+            const strResult = chunks.join()
+            onResult(strResult)
+        })
     }
 
 }

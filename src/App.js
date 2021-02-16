@@ -16,12 +16,13 @@ import {
   isProviderConnected,
   makeAlert,
   makeWarningAlert,
-  readAndDecodeBody,
+  readAndDecodeBody, runQuery,
   STORAGE_KEYS
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
 import {queryRecords} from "./lib/queries";
 import {newEngine} from "prov4itdata-query-engine";
+import SyntaxHighlighter from "react-syntax-highlighter";
 
 function App() {
 
@@ -345,8 +346,11 @@ function App() {
       </CollapsibleCard>)
 
 
+
+
   // QUERY STUFF
   const engine = newEngine();
+  const [queryResult, setQueryResult] = useState('')
 
   const queryCard = ( <CollapsibleCard header="Query" headerId="card-header-query">
     <>
@@ -357,83 +361,21 @@ function App() {
               onClick={
                 async ()=>{
 
-                  // getSources extracts the origin from the logged in user's webId and
-                  // adds extra sources based on the origin
-                  const getSources = (s) => {
-
-                    // Source 0
-                    const s0 = new URL(s.webId).origin
-                    // Additional sources
-                    const extraSources = [
-                        `${s0}/private`,
-                      `${s0}/private/imgur.ttl`,
-                      `${s0}/private/flickr.ttl`,
-                      `${s0}/private/google.ttl`,
-                    ]
-
-                    return [s0,...extraSources]
-                  }
-                  const queryResult = await handleQuery(engine, qRecord.query, getSources)
-
-
-                  /////////////////////////////////////////////////////////////////////
-                  // Handle the results
-
-                  const option01 =async () => {
-                    console.log('option01 result')
-                    const completeResult = await engine.resultToString(queryResult,'text/turtle')
-                    console.log('complete result awaited')
+                  const onResult = (result) => {
+                    setQueryResult(result)
+                    // TODO: store on Solid
                   }
 
-
-                  const option02 = async () => {
-                    const onResult = (x) => {
-                      console.log('onResult callback receives: ' )
-
-                    }
-                    // Are we dealing with a quadStream? (CONSTRUCT)
-                    if(queryResult.quadStream) {
-                      console.log('we have a quadStream')
-                      queryResult.quadStream.addListener('data', onResult)
-                    }
-
-                    // Are we dealing with a bindingsStream (SELECT)
-                    if(queryResult.bindingsStream) {
-                      console.log('we have a bindingsStream')
-                      queryResult.bindingsStream.addListener('data', onResult)
-                    }
-                  }
-
-                  // option 1: await entire result (can induce performance issues)
-                  // option01();
-                  /**
-                   * Error:
-                   * Actor https://linkedsoftwaredependencies.org/bundles/npm/@comunica/actor-init-sparql/^1.0.0/config/sets/sparql-serializers.json#myRdfSparqlSerializer can only handle quad streams
-                   */
-
-
-                  // option 2: individual results
-                  // option02()
-
-
+                  await runQuery(engine, qRecord.query, onResult)
                 }
               }>
             {qRecord.description}
           </Button>    )  })
       }
-      <Button
-          onClick={
-            async ()=>{
-
-              await handleSolidLogin()
-            }
-          }>
-        SOLID LOGIN
-      </Button>
+      <SyntaxHighlighter>{queryResult}</SyntaxHighlighter>
     </>
 
   </CollapsibleCard>)
-
 
 
   return (
@@ -457,6 +399,7 @@ function App() {
       >
         {settingsCard}
         {queryCard}
+
       </Transfer>
     </div>
   );
