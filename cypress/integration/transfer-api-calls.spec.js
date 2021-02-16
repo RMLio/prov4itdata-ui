@@ -36,11 +36,7 @@ describe('Transfer Component API calls', () => {
             .as('optionRecords')
     })
 
-    /**
-     * Note: This tests started failing.
-     * The reason for failing is under investigation, see https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/25
-     */
-    it.skip('Should GET the content of a selected RML Mapping', () => {
+    it('Should GET the content of a selected RML Mapping', () => {
 
         // Select option 1 (option 0 is NOT an RML Mapping)
         cy.get('@optionRecords')
