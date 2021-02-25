@@ -48,11 +48,11 @@ describe('Transfer Component API calls', () => {
             .wait('@getContentsOfRMLMapping')
     })
 
-    it.only('Should NOT make a GET request to check whether the provider is connected when clicking Execute and no RML Mapping is selected', () => {
+    it('Should NOT make a GET request to check whether the provider is connected when clicking Execute and no RML Mapping is selected', () => {
 
         // Returns that the stub-provider is connected
         cy.intercept('/status/*/connected', (res) => {
-            return expect("Unexpected GET request to /status/*/connected").to.be.false
+            expect("Unexpected GET request to /status/*/connected").to.be.false
         }).as('getCallForStatusProviderConnectedNotAllowed')
 
 
