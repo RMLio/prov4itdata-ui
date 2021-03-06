@@ -21,7 +21,7 @@ const statusProviderIsNotConnected = {
 /**
  * Test whether the correct API calls are made when interacting with the Transfer Component
  */
-describe('Transfer Component API calls', () => {
+describe('Transfer Component API calls', {retries: 3}, () => {
 
 
     beforeEach(() => {
