@@ -206,12 +206,11 @@ export async function getConnectionUrlForProvider(provider) {
 }
 
 /**
- * Gets Solid Configuration for the given provider from the backend.
- * @param provider
- * @returns {Promise<null|any>}
+ *
+ * @param url
+ * @returns {Promise<null>}
  */
-export async function getSolidConfiguration(provider) {
-    const url = `/configuration/${provider}/solid`
+export async function fetchAndParseBodyToJson(url) {
     const response = await fetch(url, {
         headers: {
             'Content-Type': 'application/json'
@@ -219,13 +218,22 @@ export async function getSolidConfiguration(provider) {
     })
 
     const parsedResponse = await tryParseJsonResponse(response)
-    let solidConfiguration = null
+    let jsonResponse = null
     if(parsedResponse.success)
-        solidConfiguration = parsedResponse.body
+        jsonResponse = parsedResponse.body
     else {
-        console.error('Erorr while parsing Solid Configuration. Reason: ', parsedResponse.reason)
+        console.error('Error while parsing JSON Response. Reason: ', parsedResponse.reason)
     }
-    return solidConfiguration
+    return jsonResponse
+}
+/**
+ * Gets Solid Configuration for the given provider from the backend.
+ * @param provider
+ * @returns {Promise<null|any>}
+ */
+export async function getSolidConfiguration(provider) {
+    const url = `/configuration/${provider}/solid`
+    return await fetchAndParseBodyToJson(url);
 }
 
 
@@ -303,9 +311,13 @@ const getIntermediateDatasetUrisFromSolidPod = async (s, engine) => {
     let datasetUris = []
     try {
         const originSolidPod = new URL(s.webId).origin;
-        // The location where intermediate datasets are stored
-        // TODO: derive storage directory for intermediate datasets from configuration (changes to web-app required)
-        const sourceDirectory = `${originSolidPod}/private`;
+
+        // Get Solid storage configuration to determine where intermediate datasets are stored
+        const solidStorageConfiguration = await fetchAndParseBodyToJson('/configuration/solid');
+        if(solidStorageConfiguration === null)
+            throw Error('Unable to retrieve Solid Storage Configuration');
+        
+        const sourceDirectory = `${originSolidPod}/${solidStorageConfiguration.storageDirectory}`;
 
         // SPARQL Query for selecting turtle files
         const qIntermediateDatasets =
