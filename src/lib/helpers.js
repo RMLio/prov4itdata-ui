@@ -291,39 +291,74 @@ export const handleQuery = async (engine, query, sources) => {
 
 }
 
+/**
+ * Query Solid pod for intermediate datasets
+ *
+ * @param s: Solid Session
+ * @param engine: Comunica Query Engine
+ * @returns {Promise<[]>}
+ */
+const getIntermediateDatasetUrisFromSolidPod = async (s, engine) => {
+    console.log('@getIntermediateDatasetUrisFromSolidPod')
+    let datasetUris = []
+    try {
+        const originSolidPod = new URL(s.webId).origin;
+        // The location where intermediate datasets are stored
+        // TODO: derive storage directory for intermediate datasets from configuration (changes to web-app required)
+        const sourceDirectory = `${originSolidPod}/private`;
 
-export const runQuery = async (engine, query, onResult)=>{
+        // SPARQL Query for selecting turtle files
+        const qIntermediateDatasets =
+            `
+                    PREFIX tur: <http://www.w3.org/ns/iana/media-types/text/turtle#>
+                    PREFIX ldp: <http://www.w3.org/ns/ldp#>
+                    SELECT  ?s  WHERE { ?s a tur:Resource,ldp:Resource.}
+                `
 
-    // getSources extracts the origin from the logged in user's webId and
-    // adds extra sources based on the origin
-    const solidSession = await auth.currentSession()
-    // Source 0
-    const s0 = new URL(solidSession.webId).origin
-    // Additional sources
-    const extraSources = [
-        `${s0}/private`,
-        `${s0}/private/imgur.ttl`,
-        `${s0}/private/flickr.ttl`,
-        `${s0}/private/google.ttl`,
-    ]
-
-    const sources =  [s0,...extraSources]
-    const queryResult = await handleQuery(engine, query, sources)
-
-    if(queryResult) {
-        console.log('result to string')
-        const resultStream = await engine.resultToString(queryResult)
-        resultStream.data.setEncoding('utf-8')
-        let chunks = []
-        resultStream.data.on('data', (chunk)=> {
-            chunks.push(chunk)
-        })
-
-        resultStream.data.on('end', ()=>{
-            console.log('resultString end -event')
-            const strResult = chunks.join()
-            onResult(strResult)
-        })
+        // Query
+        const result = await engine.query(qIntermediateDatasets, {sources:[sourceDirectory]})
+        // Process result
+        if(result.bindings) {
+            const bindings = await result.bindings();
+            datasetUris =  bindings.map(b => b.get('?s').value)
+        }
+    } catch (err) {
+        console.error('Error while getting intermediate dataset URIs from Solid Pod. Message: ', err)
     }
+    return datasetUris;
+}
+
+/**
+ * Runs query on intermediate datasets on the Solid pod
+ * @param engine
+ * @param query
+ * @param onResult: callback to be executed on the stringified result
+ * @returns {Promise<void>}
+ */
+export const runQuery = async (engine, query, onResult)=>{
+    const solidSession = await auth.currentSession()
+    if(!solidSession)
+        await handleSolidLogin()
+    else {
+        const sources =   await getIntermediateDatasetUrisFromSolidPod(solidSession, engine)
+        const queryResult = await handleQuery(engine, query, sources)
+
+        if(queryResult) {
+            const resultStream = await engine.resultToString(queryResult)
+            resultStream.data.setEncoding('utf-8')
+
+            // Collect chunks of data
+            let chunks = []
+            resultStream.data.on('data', (chunk)=> {
+                chunks.push(chunk)
+            })
+            // When all chunks are collected, invoke callback with stringified result
+            resultStream.data.on('end', ()=>{
+                const strResult = chunks.join()
+                onResult(strResult)
+            })
+        }
+    }
+
 
 }
