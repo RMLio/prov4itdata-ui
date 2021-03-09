@@ -358,31 +358,28 @@ function App() {
     getQueryRecords().then(setQueryRecords);
   },[])
 
+  const createQueryButton = (qId, qRecord) => ( <Button
+      onClick={
+        async ()=>{
+
+          const onResult = (result) => {
+            setQueryResult(result)
+            // TODO: store on Solid
+          }
+
+          const onError = (err) =>
+              setAlert(makeWarningAlert(`Error while executing query (query id: ${qId})\nError: ${err}`))
+
+          // Run query
+          await runQuery(engine, qRecord.query, onResult, onError)
+        }
+      }>
+    {qRecord.description}
+  </Button>) ;
+
   const queryCard = ( <CollapsibleCard header="Query" headerId="card-header-query">
     <>
-      {
-
-        Object.entries(queryRecords).map(([qId,qRecord])=>{
-
-          return ( <Button
-              onClick={
-                async ()=>{
-
-                  const onResult = (result) => {
-                    setQueryResult(result)
-                    // TODO: store on Solid
-                  }
-
-                  const onError = (err) =>
-                      setAlert(makeWarningAlert(`Error while executing query (query id: ${qId})\nError: ${err}`))
-
-                  // Run query
-                  await runQuery(engine, qRecord.query, onResult, onError)
-                }
-              }>
-            {qRecord.description}
-          </Button>    )  })
-      }
+      {(queryRecords)?Object.entries(queryRecords).map(entry=> createQueryButton(...entry)) : null }
       <SyntaxHighlighter>{queryResult}</SyntaxHighlighter>
     </>
 
