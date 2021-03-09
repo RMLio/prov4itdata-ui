@@ -3,13 +3,13 @@
 import { createOptionRecordsFromMetaData } from './helpers'
 
 
-describe('Transfer Component', () => {
+describe('Transfer Component', {retries:3}, () => {
 
 
     /**
-     * Tests for the minimal required elements of 
+     * Tests for the minimal required elements of
      * the collapsable cards
-     * @param {*} selector 
+     * @param {*} selector
      */
     function testMinimalCollapseCardStructure(selector) {
         cy.get(selector).find('.card-header')
@@ -19,7 +19,7 @@ describe('Transfer Component', () => {
 
     /**
      * Tests for the minimal collapsable card structure that contains a download element
-     * @param {*} selector 
+     * @param {*} selector
      */
     function testDownloadCollapseCard(selector) {
         testMinimalCollapseCardStructure(selector)
@@ -109,7 +109,7 @@ describe('Transfer Component', () => {
 
         // Execute RML Mapping
         cy.get('[data-test=execute-mapping]').click()
-       
+
         // Expand card: generated rdf
         cy.get('[data-test=card-generated-rdf] > .collapse > .card-body > pre').should('not.be.visible')
         cy.get('[data-test=card-generated-rdf] > .card-header > .btn').click()
