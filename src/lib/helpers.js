@@ -306,38 +306,16 @@ export const handleQuery = async (engine, query, sources) => {
  * @param engine: Comunica Query Engine
  * @returns {Promise<[]>}
  */
-const getIntermediateDatasetUrisFromSolidPod = async (s, engine) => {
-    console.log('@getIntermediateDatasetUrisFromSolidPod')
-    let datasetUris = []
-    try {
-        const originSolidPod = new URL(s.webId).origin;
-
-        // Get Solid storage configuration to determine where intermediate datasets are stored
-        const solidStorageConfiguration = await fetchAndParseBodyToJson('/configuration/solid');
-        if(solidStorageConfiguration === null)
-            throw Error('Unable to retrieve Solid Storage Configuration');
-        
-        const sourceDirectory = `${originSolidPod}/${solidStorageConfiguration.storageDirectory}`;
-
-        // SPARQL Query for selecting turtle files
-        const qIntermediateDatasets =
-            `
-                    PREFIX tur: <http://www.w3.org/ns/iana/media-types/text/turtle#>
-                    PREFIX ldp: <http://www.w3.org/ns/ldp#>
-                    SELECT  ?s  WHERE { ?s a tur:Resource,ldp:Resource.}
-                `
-
-        // Query
-        const result = await engine.query(qIntermediateDatasets, {sources:[sourceDirectory]})
-        // Process result
-        if(result.bindings) {
-            const bindings = await result.bindings();
-            datasetUris =  bindings.map(b => b.get('?s').value)
-        }
-    } catch (err) {
-        console.error('Error while getting intermediate dataset URIs from Solid Pod. Message: ', err)
-    }
-    return datasetUris;
+const getRelativePathsOfIntermediateDatasets = async () => {
+    console.log('@getRelativePathsOfIntermediateDatasets')
+    const transferConfiguration = await getTransferConfiguration();
+    if(!transferConfiguration)
+        throw Error('Transfer configuration is undefined');
+    // Map every provider in the transfer configuration to the relative path of its dataset file
+    let relativeFilePaths = Object.keys(transferConfiguration).filter(k => k!= 'solid')
+        .map(provider => transferConfiguration[provider]['solid']['filename'])
+        .map(filename => `${transferConfiguration['solid']['storageDirectory']}/${filename}`);
+    return relativeFilePaths
 }
 
 /**
@@ -347,30 +325,42 @@ const getIntermediateDatasetUrisFromSolidPod = async (s, engine) => {
  * @param onResult: callback to be executed on the stringified result
  * @returns {Promise<void>}
  */
-export const runQuery = async (engine, query, onResult)=>{
-    const solidSession = await auth.currentSession()
-    if(!solidSession)
-        await handleSolidLogin()
-    else {
-        const sources =   await getIntermediateDatasetUrisFromSolidPod(solidSession, engine)
-        const queryResult = await handleQuery(engine, query, sources)
-
-        if(queryResult) {
-            const resultStream = await engine.resultToString(queryResult)
-            resultStream.data.setEncoding('utf-8')
-
-            // Collect chunks of data
-            let chunks = []
-            resultStream.data.on('data', (chunk)=> {
-                chunks.push(chunk)
-            })
-            // When all chunks are collected, invoke callback with stringified result
-            resultStream.data.on('end', ()=>{
-                const strResult = chunks.join()
-                onResult(strResult)
-            })
+export const runQuery = async (engine, query, onResult, onError)=>{
+    try {
+        const solidSession = await auth.currentSession()
+        if(!solidSession){
+            onError('Not logged in to Solid');
+            await handleSolidLogin()
         }
+        else {
+            // Get the relative paths from transfer configuration
+            const relativePaths =   await getRelativePathsOfIntermediateDatasets()
+            // Resolve relative paths relative to the origin of the current Solid Pod
+            const originSolidPod = new URL(solidSession.webId).origin;
+            const sources = relativePaths.map(rp => new URL(rp, originSolidPod)).map(url=>url.toString())
+            // Execute Query
+            const queryResult = await handleQuery(engine, query, sources)
+            // Process result
+            if(queryResult) {
+                const resultStream = await engine.resultToString(queryResult)
+                resultStream.data.setEncoding('utf-8')
+
+                // Collect chunks of data
+                let chunks = []
+                resultStream.data.on('data', (chunk)=> {
+                    chunks.push(chunk)
+                })
+                // When all chunks are collected, invoke callback with stringified result
+                resultStream.data.on('end', ()=>{
+                    const strResult = chunks.join()
+                    onResult(strResult)
+                })
+            }
+        }
+    }catch (err) {
+        onError(err)
     }
-
-
 }
+
+export const getQueryRecords = async  () => fetchAndParseBodyToJson('/configuration/queries.json');
+export const getTransferConfiguration = async () => fetchAndParseBodyToJson('/configuration/transfer-configuration.json');

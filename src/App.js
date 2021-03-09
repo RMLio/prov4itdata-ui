@@ -7,7 +7,7 @@ import {
   createOptionRecordsFromMetaData,
   executeMappingOnBackend,
   extractProviderFromMappingUrl,
-  getConnectionUrlForProvider,
+  getConnectionUrlForProvider, getQueryRecords,
   handleLogout,
   handleQuery,
   handleSolidLogin,
@@ -20,7 +20,6 @@ import {
   STORAGE_KEYS
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
-import {queryRecords} from "./lib/queries";
 import {newEngine} from "prov4itdata-query-engine";
 import SyntaxHighlighter from "react-syntax-highlighter";
 
@@ -351,10 +350,18 @@ function App() {
   // QUERY STUFF
   const engine = newEngine();
   const [queryResult, setQueryResult] = useState('')
+  const [queryRecords, setQueryRecords] = useState({})
+
+  // Get queries from backend using side-effects.
+  // This side-effect will be executed only once.
+  useEffect(()=>{
+    getQueryRecords().then(setQueryRecords);
+  },[])
 
   const queryCard = ( <CollapsibleCard header="Query" headerId="card-header-query">
     <>
       {
+
         Object.entries(queryRecords).map(([qId,qRecord])=>{
 
           return ( <Button
@@ -366,7 +373,11 @@ function App() {
                     // TODO: store on Solid
                   }
 
-                  await runQuery(engine, qRecord.query, onResult)
+                  const onError = (err) =>
+                      setAlert(makeWarningAlert(`Error while executing query (query id: ${qId})\nError: ${err}`))
+
+                  // Run query
+                  await runQuery(engine, qRecord.query, onResult, onError)
                 }
               }>
             {qRecord.description}
