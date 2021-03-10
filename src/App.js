@@ -359,6 +359,7 @@ function App() {
   },[])
 
   const createQueryButton = (qId, qRecord) => ( <Button
+      data-test={`query-button-${qId}`}
       onClick={
         async ()=>{
 
@@ -377,10 +378,10 @@ function App() {
     {qRecord.description}
   </Button>) ;
 
-  const queryCard = ( <CollapsibleCard header="Query" headerId="card-header-query">
+  const queryCard = ( <CollapsibleCard id="card-query" header="Query" headerId="card-header-query">
     <>
       {(queryRecords)?Object.entries(queryRecords).map(entry=> createQueryButton(...entry)) : null }
-      <SyntaxHighlighter>{queryResult}</SyntaxHighlighter>
+      <SyntaxHighlighter data-test="query-result">{queryResult}</SyntaxHighlighter>
     </>
 
   </CollapsibleCard>)

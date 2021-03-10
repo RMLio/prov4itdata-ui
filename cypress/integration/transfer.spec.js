@@ -36,6 +36,8 @@ describe('Transfer Component', {retries:3}, () => {
 
         cy.intercept('GET', '/rml/mappings-metadata.json', {fixture : 'mappings-metadata.json'})
 
+        cy.intercept('GET', '/configuration/queries.json', {fixture: 'queries.json'}).as('queries');
+
         cy.visit('/')
 
         cy
@@ -50,6 +52,7 @@ describe('Transfer Component', {retries:3}, () => {
             path: '/rml/*/*'
 
         }, { 'fixture': 'example-mapping.ttl' })
+
 
     })
 
@@ -122,5 +125,25 @@ describe('Transfer Component', {retries:3}, () => {
 
     })
 
+    it('Correctly renders the Query card',()=>{
+        // Test whether the query card exists
+        cy.get('[data-test=card-query]').log('Query card exists');
+
+        // Find query card header & expand the query card
+        cy.get('[data-test=card-header-query]')
+            .click()
+
+        cy.fixture('queries').then((queries)=>{
+            const nQueries = Object.keys(queries).length;
+
+            // Test whether a button is rendered for every query
+            cy.get('[data-test=card-query] > .collapse > .card-body > .btn')
+                .should('have.length',nQueries)
+                .log('The number of query buttons is correct')
+        })
+
+        // Test whether the syntax component for the query result exists
+        cy.get('[data-test=query-result]').log('Query result syntax component exists')
+    })
 
 })
