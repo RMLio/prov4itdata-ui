@@ -370,6 +370,36 @@ export const runQuery = async (engine, query, onResult, onMetadataAvailable, onE
         onError(err)
     }
 }
+export const storeRDFDataOnSolidPod = async (data, relativeFilepath, onSuccess = f=>f, onError = f=>f) => {
+    try {
+        const solidSession = await auth.currentSession()
+        if(solidSession){
+            const podUrl = new URL(solidSession.webId).origin
+            const url = new URL(relativeFilepath, podUrl).toString();
 
+            const params = {
+                method : 'PATCH',
+                body : `INSERT DATA {${data}}`,
+                headers : {
+                    'Content-Type': 'application/sparql-update'
+                }
+            }
+
+            const response = await auth.fetch(url, params)
+            if (response.status === 200)
+                onSuccess(response)
+            else {
+                const errMessage = `Unable to store data on Solid Pod! (${response.status}): ${response.statusText}`;
+                throw Error(errMessage);
+            }
+        }else {
+            throw Error('Not Logged on to Solid');
+        }
+    }catch (err) {
+        onError(err)
+    }
+
+
+}
 export const getQueryRecords = async  () => fetchAndParseBodyToJson('/configuration/queries.json');
 export const getTransferConfiguration = async () => fetchAndParseBodyToJson('/configuration/transfer-configuration.json');

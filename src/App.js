@@ -7,9 +7,8 @@ import {
   createOptionRecordsFromMetaData,
   executeMappingOnBackend,
   extractProviderFromMappingUrl,
-  getConnectionUrlForProvider, getQueryRecords,
+  getConnectionUrlForProvider, getQueryRecords, getTransferConfiguration,
   handleLogout,
-  handleQuery,
   handleSolidLogin,
   handleSolidLogout,
   handleSolidOperation,
@@ -17,7 +16,7 @@ import {
   makeAlert,
   makeWarningAlert,
   readAndDecodeBody, runQuery,
-  STORAGE_KEYS
+  STORAGE_KEYS,  storeRDFDataOnSolidPod
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
 import {newEngine} from "@prov4itdata/actor-init-sparql";
@@ -364,9 +363,18 @@ function App() {
       onClick={
         async ()=>{
 
-          const onResult = (result) => {
+          const onResult = async (result) => {
             setQueryResult(result)
-            // TODO: store on Solid
+
+            // Store result on Solid Pod
+            const transferConfiguration = await getTransferConfiguration();
+            const transferStorageDirectory = transferConfiguration['solid']['storageDirectory'];
+            const transferFilename = transferConfiguration['solid']['transferFilename'];
+            const relativePath = [transferStorageDirectory, transferFilename].join('/')
+
+            await storeRDFDataOnSolidPod(result, relativePath, (success)=>{},(error)=>{
+              setAlert(makeWarningAlert(error.toString()))
+            })
           }
 
           const onMetadataAvailable = (metadata) =>
