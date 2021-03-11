@@ -325,7 +325,7 @@ const getRelativePathsOfIntermediateDatasets = async () => {
  * @param onResult: callback to be executed on the stringified result
  * @returns {Promise<void>}
  */
-export const runQuery = async (engine, query, onResult, onError)=>{
+export const runQuery = async (engine, query, onResult, onMetadataAvailable, onError)=>{
     try {
         const solidSession = await auth.currentSession()
         if(!solidSession){
@@ -340,8 +340,17 @@ export const runQuery = async (engine, query, onResult, onError)=>{
             const sources = relativePaths.map(rp => new URL(rp, originSolidPod)).map(url=>url.toString())
             // Execute Query
             const queryResult = await handleQuery(engine, query, sources)
+
             // Process result
             if(queryResult) {
+
+                // Process metadata, if any
+                if(queryResult.metadata) {
+                    const metadata = await queryResult.metadata();
+                    onMetadataAvailable(metadata)
+                }
+
+                // Process the actual query result data
                 const resultStream = await engine.resultToString(queryResult)
                 resultStream.data.setEncoding('utf-8')
 
