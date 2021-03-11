@@ -20,7 +20,7 @@ import {
   STORAGE_KEYS
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
-import {newEngine} from "prov4itdata-query-engine";
+import {newEngine} from "@prov4itdata/actor-init-sparql";
 import SyntaxHighlighter from "react-syntax-highlighter";
 
 function App() {
@@ -351,6 +351,7 @@ function App() {
   const engine = newEngine();
   const [queryResult, setQueryResult] = useState('')
   const [queryRecords, setQueryRecords] = useState({})
+  const [queryProvenance, setQueryProvenance] = useState('')
 
   // Get queries from backend using side-effects.
   // This side-effect will be executed only once.
@@ -368,11 +369,15 @@ function App() {
             // TODO: store on Solid
           }
 
+          const onMetadataAvailable = (metadata) =>
+            setQueryProvenance(JSON.stringify(metadata, null, 2))
+
+
           const onError = (err) =>
               setAlert(makeWarningAlert(`Error while executing query (query id: ${qId})\nError: ${err}`))
 
           // Run query
-          await runQuery(engine, qRecord.query, onResult, onError)
+          await runQuery(engine, qRecord.query, onResult,onMetadataAvailable, onError)
         }
       }>
     {qRecord.description}
@@ -382,6 +387,9 @@ function App() {
     <>
       {(queryRecords)?Object.entries(queryRecords).map(entry=> createQueryButton(...entry)) : null }
       <SyntaxHighlighter data-test="query-result">{queryResult}</SyntaxHighlighter>
+      Query provenance
+      <SyntaxHighlighter data-test="query-provenance">{queryProvenance}</SyntaxHighlighter>
+
     </>
 
   </CollapsibleCard>)
