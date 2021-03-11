@@ -361,7 +361,7 @@ export const runQuery = async (engine, query, onResult, onMetadataAvailable, onE
                 })
                 // When all chunks are collected, invoke callback with stringified result
                 resultStream.data.on('end', ()=>{
-                    const strResult = chunks.join()
+                    const strResult = chunks.join('')
                     onResult(strResult)
                 })
             }
