@@ -16,11 +16,19 @@ import {
   makeAlert,
   makeWarningAlert,
   readAndDecodeBody, runQuery,
-  STORAGE_KEYS,  storeRDFDataOnSolidPod
+  STORAGE_KEYS, storeRDFDataOnSolidPod
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
 import {newEngine} from "@prov4itdata/actor-init-sparql";
 import SyntaxHighlighter from "react-syntax-highlighter";
+import {
+  createOptionRecordsFromConfigurationRecords,
+  getConfigurationRecords, getConfigurationRecordById,
+  getPipelineRecords, getRecordsForPipeline, validatePipelineRecord, validateStepRecord
+} from "./lib/configuration-helpers";
+
+import {createPipelineSelectorCard} from "./lib/component-helpers";
+import {getSelectedPipeline} from "./lib/storage";
 
 function App() {
 
@@ -76,35 +84,57 @@ function App() {
     setMappingOptions([defaultMapping, ...data])
   }
 
-  // Fetch mappings-metadata using side-effects.
-  // This side-effect will be executed only once.
-  useEffect(() => {
-    const fetchMappingsMetadata = async () => {
-      const urlMetaData = "/rml/mappings-metadata.json";
-      let mappingOptions = [];
-
+  // Fetch configuration
+  useEffect(()=>{
+    let optionRecords = []
+    const processConfiguration = async () => {
       try {
-        const response = await fetch(urlMetaData)
+        const configurationRecords = await getConfigurationRecords();
 
-        if(response.status !== 200 )
-          throw new Error('Error while getting the RML Mapping metadata...');
-
-        const body = await readAndDecodeBody(response)
-        const optionData = JSON.parse(body)
-        mappingOptions = [...createOptionRecordsFromMetaData(optionData)]
-
-      } catch (e) {
-        console.log(e.message)
-        const errMessage = e.message
-        setAlert(makeWarningAlert(errMessage))
-
+        optionRecords = createOptionRecordsFromConfigurationRecords(configurationRecords)
+        console.log('option records: ', optionRecords)
+      } catch (err) {
+        console.log('Error while processing configuration! Message: ' , err);
       } finally {
-        updateMappings(mappingOptions)
+        console.log('updating option records : ' , optionRecords)
+        updateMappings(optionRecords)
       }
+
     }
 
-    fetchMappingsMetadata();
+
+    processConfiguration()
+
   },[])
+  // Fetch mappings-metadata using side-effects.
+  // This side-effect will be executed only once.
+  // useEffect(() => {
+  //   const fetchMappingsMetadata = async () => {
+  //     const urlMetaData = "/rml/mappings-metadata.json";
+  //     let mappingOptions = [];
+  //
+  //     try {
+  //       const response = await fetch(urlMetaData)
+  //
+  //       if(response.status !== 200 )
+  //         throw new Error('Error while getting the RML Mapping metadata...');
+  //
+  //       const body = await readAndDecodeBody(response)
+  //       const optionData = JSON.parse(body)
+  //       mappingOptions = [...createOptionRecordsFromMetaData(optionData)]
+  //
+  //     } catch (e) {
+  //       console.log(e.message)
+  //       const errMessage = e.message
+  //       setAlert(makeWarningAlert(errMessage))
+  //
+  //     } finally {
+  //       updateMappings(mappingOptions)
+  //     }
+  //   }
+  //
+  //   fetchMappingsMetadata();
+  // },[])
 
 
   /**
@@ -113,11 +143,17 @@ function App() {
    * Note: the default mapping option does not refer to a mapping and will clear the mapping content.
    * @param {*} e : event triggered when the user selected a mapping from the MappingSelector.
    */
-  const handleOnMappingChange = (e) => {
+  const handleOnMappingChange = async (e) => {
 
     if(e.target.value !== 'default') {
+
+      const configurationRecords = await getConfigurationRecords();
+      const pipelineRecords = getPipelineRecords(configurationRecords);
+      console.log('pipeline records: ' , pipelineRecords)
+      const pipelineRecord = getConfigurationRecordById(configurationRecords,e.target.value)
+      console.log('currentlys elected pipeline record:  ', pipelineRecord);
       // fetch contents and set the state variable mappingContent
-      updateMappingFromUrl(e.target.value)
+      // updateMappingFromUrl(e.target.value)
     } else
       // When selecting the default option (no mapping), clear the mapping.
       clearMapping()
@@ -167,7 +203,10 @@ function App() {
       localStorage.setItem(STORAGE_KEYS.EXECUTION_ATTEMPTS, '1');
     }
 
-    if(mapping.value !== null) {
+    console.log('executing mapping: ', mapping)
+    const config = await getConfigurationRecords()
+
+    if(false && mapping.value !== null) {
       // Extract provider & filename from e.target.value
       const [, provider, filename] = String(mapping.value).split('/')
 
@@ -403,6 +442,57 @@ function App() {
   </CollapsibleCard>)
 
 
+  // PIPELINE STUFF
+
+  /**
+   * Handler for when the pipeline selection has changed
+   * @param e
+   */
+  const handleOnPipelineSelectionChanged = async (e) => {
+    console.log(`handleSelectionChanged for ${e.target.value}`)
+    const currentPipelineId = e.target.value
+    const configurationRecords = await getConfigurationRecords()
+    const pipelineRecordIds = getPipelineRecords(configurationRecords).map(pr=>pr.id)
+
+    if(pipelineRecordIds.includes(currentPipelineId)) {
+      localStorage.setItem(STORAGE_KEYS.SELECTED_PIPELINE_ID, currentPipelineId)
+
+      const pipelineRecord = getConfigurationRecordById(configurationRecords, currentPipelineId);
+      validatePipelineRecord(pipelineRecord);
+
+      // For now, we only consider the first step
+      const stepRecord = pipelineRecord['steps'][0]
+      validateStepRecord(stepRecord)
+      if(!stepRecord['type'] === 'mappingConfiguration')
+        throw Error('First step record should be a mapping configuration');
+
+      const mappingId = stepRecord['forId'];
+      const mappingRecord = getConfigurationRecordById(configurationRecords, mappingId);
+      console.log('mapping record: ' , mappingRecord)
+      updateMappingFromUrl(mappingRecord.file)
+
+    }else{
+      localStorage.removeItem(STORAGE_KEYS.SELECTED_PIPELINE_ID);
+    }
+
+
+  }
+
+  /**
+   * Handler for executing the selected pipeline
+   * @param e
+   */
+  const handleOnExecutePipeline =async (e) => {
+    console.log('@handleOnExecutePipeline')
+    const currentPipelineId = getSelectedPipeline()
+    console.log(`currentPipelineId: ${currentPipelineId}`)
+
+  }
+
+  const pipelineSelectorCard = createPipelineSelectorCard(mappingOptions,
+      handleOnPipelineSelectionChanged,
+      handleOnExecutePipeline);
+
   return (
     <div className="App container">
       <h1>PROV4ITDaTa-DAPSI</h1>
@@ -424,6 +514,7 @@ function App() {
       >
         {settingsCard}
         {queryCard}
+        {pipelineSelectorCard}
 
       </Transfer>
     </div>

@@ -4,7 +4,8 @@ export const STORAGE_KEYS = {
     MAPPING_CONTENT: 'MAPPING_CONTENT',
     MAPPING_URL: 'MAPPING_URL',
     EXECUTION_ATTEMPTS: 'EXECUTE_ATTEMPTS',
-    QUERY_RESULT: 'QUERY_RESULT'
+    QUERY_RESULT: 'QUERY_RESULT',
+    SELECTED_PIPELINE_ID: 'SELECTED_PIPELINE_ID'
 }
 
 export const MIME_TYPES = {
@@ -108,6 +109,7 @@ export function createOptionRecordsFromMetaData(mappingMeta) {
         })
     })
 }
+
 
 
 /**
@@ -403,3 +405,4 @@ export const storeRDFDataOnSolidPod = async (data, relativeFilepath, onSuccess =
 }
 export const getQueryRecords = async  () => fetchAndParseBodyToJson('/configuration/queries.json');
 export const getTransferConfiguration = async () => fetchAndParseBodyToJson('/configuration/transfer-configuration.json');
+
