@@ -2,8 +2,9 @@ import {fetchAndParseBodyToJson} from "./helpers";
 
 
 export const getConfigurationRecords = async () => (await fetchAndParseBodyToJson('/configuration/configuration.json'))['configurationRecords'];
-export const getMappingRecords = (configurationRecords) => configurationRecords.filter(cr => cr.type === 'mapping');
-export const getPipelineRecords = (configurationRecords) => configurationRecords.filter(cr => cr.type === 'pipeline');
+export const filterRecordsByType = (records, t) => records.filter(r => r.type === t);
+export const getMappingRecords = (configurationRecords) =>  filterRecordsByType(configurationRecords, 'mapping');
+export const getPipelineRecords = (configurationRecords) => filterRecordsByType(configurationRecords, 'pipeline');
 export const getConfigurationRecordById = (configurationRecords, id) => configurationRecords.find(cr=>cr.id === id);
 
 export const validatePipelineRecord = (record) => {

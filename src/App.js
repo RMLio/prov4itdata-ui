@@ -16,7 +16,7 @@ import {
   makeAlert,
   makeWarningAlert,
   readAndDecodeBody, runQuery,
-  STORAGE_KEYS, storeRDFDataOnSolidPod
+  STORAGE_KEYS, storeRDFDataOnSolidPod, tryParseJsonResponse
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
 import {newEngine} from "@prov4itdata/actor-init-sparql";
@@ -28,7 +28,14 @@ import {
 } from "./lib/configuration-helpers";
 
 import {createPipelineSelectorCard} from "./lib/component-helpers";
-import {getSelectedPipeline} from "./lib/storage";
+import {
+  getCurrentPipelineStep,
+  getSelectedPipeline,
+  removePipelineVariablesFromStorage,
+  removeSelectedPipeline, setCurrentPipelineStep,
+  setSelectedPipeline
+} from "./lib/storage";
+import {storeOnSolidPod} from "./lib/solid-helpers";
 
 function App() {
 
@@ -455,13 +462,14 @@ function App() {
     const pipelineRecordIds = getPipelineRecords(configurationRecords).map(pr=>pr.id)
 
     if(pipelineRecordIds.includes(currentPipelineId)) {
-      localStorage.setItem(STORAGE_KEYS.SELECTED_PIPELINE_ID, currentPipelineId)
-
+      setSelectedPipeline(currentPipelineId)
       const pipelineRecord = getConfigurationRecordById(configurationRecords, currentPipelineId);
       validatePipelineRecord(pipelineRecord);
 
       // For now, we only consider the first step
-      const stepRecord = pipelineRecord['steps'][0]
+      setCurrentPipelineStep(0);
+      const currentPipelineStepindex = getCurrentPipelineStep();
+      const stepRecord = pipelineRecord['steps'][currentPipelineStepindex]
       validateStepRecord(stepRecord)
       if(!stepRecord['type'] === 'mappingConfiguration')
         throw Error('First step record should be a mapping configuration');
@@ -472,20 +480,123 @@ function App() {
       updateMappingFromUrl(mappingRecord.file)
 
     }else{
-      localStorage.removeItem(STORAGE_KEYS.SELECTED_PIPELINE_ID);
+      removePipelineVariablesFromStorage()
     }
-
-
   }
 
   /**
    * Handler for executing the selected pipeline
+   * TODO: support execution of multiple steps
    * @param e
    */
   const handleOnExecutePipeline =async (e) => {
-    console.log('@handleOnExecutePipeline')
+    console.log('@handleOnExecutePipeline!!!')
+    const configurationRecords = await getConfigurationRecords()
+
+    // Get solid configuration
+    const solidConfiguration = await getConfigurationRecordById(configurationRecords, 'solid-config');
+    const storageDirectory = solidConfiguration['storageDirectory'];
+
+    // Get pipeline configuration
     const currentPipelineId = getSelectedPipeline()
-    console.log(`currentPipelineId: ${currentPipelineId}`)
+    const pipelineRecord = getConfigurationRecordById(configurationRecords, currentPipelineId)
+
+    // Step
+    const currentPipelineStepIndex = getCurrentPipelineStep();
+    const currentStepRecord = pipelineRecord['steps'][currentPipelineStepIndex];
+    const referentRecord = getConfigurationRecordById(configurationRecords, currentStepRecord['forId'])
+
+    if(referentRecord['type'] === 'mapping') {
+      const {provider, file} = referentRecord
+
+      // If provider isn't connected yet, handle that first
+      const providerConnected = await isProviderConnected(provider)
+      if(!providerConnected)
+        await handleProviderConnection(provider)
+
+      // If Solid isn't connected yet, handle that first
+      let solidSession = await handleSolidLogin();
+      if(!solidSession)
+        await handleSolidLogin();
+
+      // If provider connect & logged in to solid
+      if(providerConnected && solidSession) {
+
+        // Execute the mapping
+        const params = {provider, file}
+        const response =  await fetch('/rmlmapper', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(params)
+        })
+
+        // Parse & process result
+        const parsedResponse = await tryParseJsonResponse(response)
+
+        let alertMessages = []
+        if(parsedResponse.success) {
+          const {rdf, prov} = parsedResponse.body
+
+          // Create URLs to generated result and corresponding provenance
+          const outputConfiguration = currentStepRecord['output'];
+          const podUrl = new URL(solidSession.webId).origin
+
+          // Do we have RDF data?
+          if(rdf) {
+            setGeneratedOutput(rdf)
+
+            // Create url to store generated result on solid pod
+            const filenameResult = outputConfiguration.result;
+            if(filenameResult) {
+              const relativePathResult = [storageDirectory, outputConfiguration.result].join('/')
+              const urlRDFData = new URL(relativePathResult, podUrl).toString()
+
+              await storeOnSolidPod(urlRDFData,
+                  rdf,
+                  ()=>setAlert(makeAlert('info', 'Successfully stored generated result on Solid pod!!')),
+                  (err)=>setAlert(makeWarningAlert('Error while storing result on Solid Pod'))
+              )
+            }
+
+          }
+          else alertMessages.push('Generated RDF data is empty')
+
+          // Do we have prov data?
+          if(prov) {
+            setProvenance(prov)
+            // Create url to store corresponding provenance data on solid pod
+            const filenameProvenanceResult = outputConfiguration.provenanceResult
+            if(filenameProvenanceResult) {
+              const relativePathProv = [storageDirectory, filenameProvenanceResult].join('/')
+              const urlProv = new URL(relativePathProv, podUrl).toString()
+
+              await storeOnSolidPod(urlProv,
+                  prov,
+                  ()=>setAlert(makeAlert('info', 'Successfully stored provenance data on Solid Pod')),
+                  (err)=>setAlert(makeWarningAlert('Error while storing provenance data on Solid Pod'))
+              );
+            }
+          }
+          else alertMessages.push('Provenance data is empty')
+
+        }
+
+        if(alertMessages.length>0) {
+          setAlert(makeAlert('warning', alertMessages.join('\n')))
+        }
+      }
+
+
+      // Output
+      console.log(`pipelineRecord: `, pipelineRecord);
+      const pipelineOutput = pipelineRecord['output'];
+      console.log('output: ', pipelineOutput)
+
+    }
+
+
 
   }
 
