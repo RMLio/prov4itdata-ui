@@ -604,9 +604,6 @@ function App() {
 
   }
 
-  const pipelineSelectorCard = createPipelineSelectorCard(mappingOptions,
-      handleOnPipelineSelectionChanged,
-      handleOnExecutePipeline);
 
   return (
     <div className="App container">
