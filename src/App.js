@@ -558,6 +558,8 @@ function App() {
                   ()=>setAlert(makeAlert('info', 'Successfully stored generated result on Solid pod!!')),
                   (err)=>setAlert(makeWarningAlert('Error while storing result on Solid Pod'))
               )
+            }else {
+              setAlert(makeWarningAlert('No filepath specified for storing the generated RDF data on the Solid pod'))
             }
 
           }
@@ -577,6 +579,8 @@ function App() {
                   ()=>setAlert(makeAlert('info', 'Successfully stored provenance data on Solid Pod')),
                   (err)=>setAlert(makeWarningAlert('Error while storing provenance data on Solid Pod'))
               );
+            }else {
+              setAlert(makeWarningAlert('No filepath specified for storing the provenance data on the Solid pod'))
             }
           }
           else alertMessages.push('Provenance data is empty')
