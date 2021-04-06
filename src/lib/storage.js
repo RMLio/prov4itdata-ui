@@ -3,20 +3,26 @@ import {STORAGE_KEYS} from "./helpers";
 // Shorthands
 const ls = localStorage;
 const sk = STORAGE_KEYS;
+class StorageObject {
+    constructor(key) {
+        this.key = key
+    }
+    set(value) {ls.setItem(this.key, value)}
+    get() {return ls.getItem(this.key)}
+    remove() {ls.removeItem(this.key)}
+}
+
+// Mapping content
+export const mappingContent = new StorageObject(sk.MAPPING_CONTENT)
 
 // Pipeline
-export const setSelectedPipeline = (value) => ls.setItem(sk.SELECTED_PIPELINE_ID, value)
-export const getSelectedPipeline = () => ls.getItem(sk.SELECTED_PIPELINE_ID)
-export const removeSelectedPipeline = () =>  ls.removeItem(sk.SELECTED_PIPELINE_ID);
-
+export const pipelineId = new StorageObject(sk.SELECTED_PIPELINE_ID)
 
 // Pipeline step
-export const setCurrentPipelineStep = (stepIndex) => ls.setItem(sk.CURRENT_PIPELINE_STEP_INDEX, stepIndex);
-export const getCurrentPipelineStep = () => ls.getItem(sk.CURRENT_PIPELINE_STEP_INDEX);
-export const removeCurrentPipelineStep = () => ls.removeItem(sk.CURRENT_PIPELINE_STEP_INDEX)
+export const pipelineStep = new StorageObject(sk.CURRENT_PIPELINE_STEP_INDEX)
 
 //
 export const removePipelineVariablesFromStorage = () => {
-    removeSelectedPipeline();
-    removeCurrentPipelineStep();
+    pipelineId.remove()
+    pipelineStep.remove()
 }
