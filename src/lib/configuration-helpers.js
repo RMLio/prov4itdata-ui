@@ -1,12 +1,36 @@
 import {fetchAndParseBodyToJson} from "./helpers";
+import {configurationRecords, pipelineId} from "./storage";
 
 
-export const getConfigurationRecords = async () => (await fetchAndParseBodyToJson('/configuration/configuration.json'))['configurationRecords'];
+export const getConfigurationRecords = async () => {
+    const urlConfigurationRecords = '/configuration/configuration.json'; // TODO: make configurable
+    let configurationRecords = [ ];
+    try {
+        const body = await fetchAndParseBodyToJson(urlConfigurationRecords);
+        configurationRecords = body['configurationRecords'];
+    } catch (err) {
+        console.error(`Error while getting configuration records from ${urlConfigurationRecords}`
+         + 'Message: ', err)
+    } finally {
+        return configurationRecords
+    }
+}
 export const filterRecordsByType = (records, t) => records.filter(r => r.type === t);
 export const getMappingRecords = (configurationRecords) =>  filterRecordsByType(configurationRecords, 'mapping');
 export const getPipelineRecords = (configurationRecords) => filterRecordsByType(configurationRecords, 'pipeline');
 export const getConfigurationRecordById = (configurationRecords, id) => configurationRecords.find(cr=>cr.id === id);
+export const getQueryRecords = (configurationRecords) => filterRecordsByType(configurationRecords, 'query');
+export const getStepAndReferentRecord = (configurationRecords, pipelineId, stepIndex) => {
 
+    const pipelineRecord = getConfigurationRecordById(configurationRecords, pipelineId)
+
+    const stepRecord = pipelineRecord['steps'][stepIndex];
+    const referentRecord = getConfigurationRecordById(configurationRecords, stepRecord['forId']);
+    return {
+        stepRecord,
+        referentRecord
+    }
+}
 export const validatePipelineRecord = (record) => {
     if(!record['steps'])
         throw Error('"steps" property not present in pipeline record!' +
@@ -38,12 +62,6 @@ export function createOptionRecordsFromConfigurationRecords(configurationRecords
         // For now, we only use the first step (which is a mapping) of the pipeline,
         // because the user has to be able to inspect the mapping and the UI's first design only accounted for 1 mapping
         const stepRecord = plr['steps'][0];
-
-        if(stepRecord.type !== 'mappingConfiguration')
-            throw Error(`The first step of the pipeline should be of type mappingConfiguration, got ${stepRecord.type}`)
-
-        // Find the mapping record to which is referred
-        const mappingRecord = mappingRecords.find(mr => mr.id === stepRecord['forId'])
 
         return {
             value: plr['id'],

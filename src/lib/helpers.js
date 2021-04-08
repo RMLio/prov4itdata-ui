@@ -1,81 +1,8 @@
 import auth from "solid-auth-client";
+import {filterRecordsByType, getConfigurationRecords} from "./configuration-helpers";
+import {getOrEstablishSolidSession} from "./solid-helpers";
+import {MIME_TYPES} from "./storage";
 
-export const STORAGE_KEYS = {
-    MAPPING_CONTENT: 'MAPPING_CONTENT',
-    MAPPING_URL: 'MAPPING_URL',
-    EXECUTION_ATTEMPTS: 'EXECUTE_ATTEMPTS',
-    QUERY_RESULT: 'QUERY_RESULT',
-    SELECTED_PIPELINE_ID: 'SELECTED_PIPELINE_ID',
-    CURRENT_PIPELINE_STEP_INDEX: 'CURRENT_PIPELINE_STEP_INDEX'
-}
-
-export const MIME_TYPES = {
-    APPLICATION_JSON: 'application/json'
-}
-
-export const handleSolidLogout = async () =>  {
-    console.log('@handleSolidLogout')
-    try {
-        await auth.logout();
-    }catch (e) {
-        console.error('Error while logging out from Solid')
-    }
-}
-
-export const handleSolidLogin = async () => {
-    let session = await auth.currentSession();
-
-    // Let the user log in when that wasn't the case already.
-    if (!session) {
-        // Not logged on to Solid
-        const popupUri = 'https://solidcommunity.net/common/popup.html';
-        session = await auth.popupLogin({popupUri})
-    }
-    return session
-}
-
-/**
- * Makes sure that the user has logged into the Solid Pod.
- * Afterwards, it handles the Solid operation specified by solidFetchParams.
- * Upon success, the resulting response will be passed on to onSuccess
- * @param solidFetchParams
- * @param onSuccess
- * @returns {Promise<void>}
- */
-export const handleSolidOperation = async (solidFetchParams, onSuccess, onError) => {
-    let session = await handleSolidLogin();
-
-    try {
-
-        if (!session)
-            throw 'You are not logged in to your Solid Pod.'
-
-        const mappingUrl = localStorage.getItem(STORAGE_KEYS.MAPPING_URL)
-        const provider = mappingUrl ? extractProviderFromMappingUrl(mappingUrl) : undefined
-        if (!provider)
-            throw 'Mapping provider not specified';
-
-        // Obtain the Solid Configuration (i.e. storage location for the current provider)
-        const solidConfig = await getSolidConfiguration(provider)
-
-        // Construct the URL of the file we want to fetch from the Solid Pod
-        const podUrl = new URL(session.webId).origin
-        const relativePath = [solidConfig.storageDirectory, solidConfig.filename].join('/')
-        const url = new URL(relativePath, podUrl).toString()
-
-        // Process response
-        const response = await auth.fetch(url, solidFetchParams)
-        if (response.status === 200)
-            onSuccess(response)
-        else {
-            const errMessage = `Request unsuccesful! Status (${response.status}): ${response.statusText}`;
-            throw errMessage;
-        }
-
-    } catch (e) {
-        onError(e)
-    }
-}
 
 /**
  * Reads response as a stream & return decoded result.
@@ -229,16 +156,6 @@ export async function fetchAndParseBodyToJson(url) {
     }
     return jsonResponse
 }
-/**
- * Gets Solid Configuration for the given provider from the backend.
- * @param provider
- * @returns {Promise<null|any>}
- */
-export async function getSolidConfiguration(provider) {
-    const url = `/configuration/${provider}/solid`
-    return await fetchAndParseBodyToJson(url);
-}
-
 
 export function makeAlert(variant, body) {
     return {variant, body}
@@ -297,7 +214,7 @@ export const handleQuery = async (engine, query, sources) => {
 
     }else {
         console.log('NOT LOGGED IN TO SOLID... CANT QUERY !')
-        await handleSolidLogin()
+        await getOrEstablishSolidSession()
     }
 
 }
@@ -333,7 +250,7 @@ export const runQuery = async (engine, query, onResult, onMetadataAvailable, onE
         const solidSession = await auth.currentSession()
         if(!solidSession){
             onError('Not logged in to Solid');
-            await handleSolidLogin()
+            await getOrEstablishSolidSession()
         }
         else {
             // Get the relative paths from transfer configuration
@@ -404,6 +321,9 @@ export const storeRDFDataOnSolidPod = async (data, relativeFilepath, onSuccess =
 
 
 }
-export const getQueryRecords = async  () => fetchAndParseBodyToJson('/configuration/queries.json');
-export const getTransferConfiguration = async () => fetchAndParseBodyToJson('/configuration/transfer-configuration.json');
+export const getTransferConfiguration = async () => {
+    const configurationRecords = await getConfigurationRecords()
+    const solidConfigurationRecord = filterRecordsByType(configurationRecords, 'solidConfiguration')
+    return {}
+}
 

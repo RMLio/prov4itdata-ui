@@ -1,6 +1,6 @@
 /// <reference types="Cypress" />
 
-import { createOptionRecordsFromMetaData } from './helpers'
+import { createOptionRecordsFromConfigurationRecords} from "../../src/lib/configuration-helpers";
 
 // stub status status response body that indicates the provider is connected
 const statusProviderIsConnected = {
@@ -25,15 +25,18 @@ describe('Transfer Component API calls', {retries: 3}, () => {
 
 
     beforeEach(() => {
-        cy.intercept('GET', '/rml/mappings-metadata.json', {fixture : 'mappings-metadata.json'})
+
+        cy.intercept('GET', '/configuration/configuration.json', {fixture: 'configuration.json'})
         cy.intercept('GET', '/rml/*/*.ttl', {fixture : 'example-mapping.ttl'}).as('getContentsOfRMLMapping')
         cy.visit('/')
 
         cy
-            .fixture('mappings-metadata')
-            .then(createOptionRecordsFromMetaData, (error) => console.log("error while creating options from metadata"))
+            .fixture('configuration')
+            .then((records)=>records['configurationRecords'])
+            .then(createOptionRecordsFromConfigurationRecords, (error) => console.log("error while creating options from metadata"))
             .then(options => [{ value: 'default' }, ...options])
             .as('optionRecords')
+
     })
 
     it('Should GET the content of a selected RML Mapping', () => {

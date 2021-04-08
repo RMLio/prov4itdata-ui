@@ -4,51 +4,56 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import Transfer from "./components/transfer";
 import {Alert, Button} from 'react-bootstrap';
 import {
-  createOptionRecordsFromMetaData,
-  executeMappingOnBackend,
-  extractProviderFromMappingUrl,
-  getConnectionUrlForProvider, getQueryRecords, getTransferConfiguration,
+  getConnectionUrlForProvider,
   handleLogout,
-  handleSolidLogin,
-  handleSolidLogout,
-  handleSolidOperation,
   isProviderConnected,
   makeAlert,
   makeWarningAlert,
-  readAndDecodeBody, runQuery,
-  STORAGE_KEYS, storeRDFDataOnSolidPod, tryParseJsonResponse
+  readAndDecodeBody,
+  tryParseJsonResponse
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
 import {newEngine} from "@prov4itdata/actor-init-sparql";
 import SyntaxHighlighter from "react-syntax-highlighter";
 import {
   createOptionRecordsFromConfigurationRecords,
-  getConfigurationRecords, getConfigurationRecordById,
-  getPipelineRecords, getRecordsForPipeline, validatePipelineRecord, validateStepRecord
+  filterRecordsByType,
+  getConfigurationRecordById,
+  getConfigurationRecords,
+  getPipelineRecords,
+  getQueryRecords,
+  getStepAndReferentRecord,
+  validatePipelineRecord,
+  validateStepRecord
 } from "./lib/configuration-helpers";
 
-import {createPipelineSelectorCard} from "./lib/component-helpers";
+import * as storage from "./lib/storage";
+
 import {
-  getCurrentPipelineStep,
-  getSelectedPipeline,
-  removePipelineVariablesFromStorage,
-  removeSelectedPipeline, setCurrentPipelineStep,
-  setSelectedPipeline
-} from "./lib/storage";
-import {storeOnSolidPod} from "./lib/solid-helpers";
+  fetchFromSolidPod,
+  getOrEstablishSolidSession,
+  handleSolidLogout,
+  removeFromSolidPod,
+  storeOnSolidPod
+} from "./lib/solid-helpers";
+import {executeQuery} from "./lib/query-helpers";
+import urlJoin from "proper-url-join";
+import {AUTHORIZATION_STATES, EXECUTION_STATES} from "./lib/storage";
+
 
 function App() {
 
   let [mappingOptions, setMappingOptions] = useState()
   let [mapping, setMapping] = useState( {
-    content : localStorage.getItem(STORAGE_KEYS.MAPPING_CONTENT) || '',
-    value : localStorage.getItem(STORAGE_KEYS.MAPPING_URL)
+    content : storage.mappingContent.get() || '',
   })
 
+  let [selectedOptionId, setSelectedOptionId] = useState(storage.pipelineId.get())
   let [generatedOutput, setGeneratedOutput] = useState("")
   let [provenance, setProvenance] = useState("")
   let [solidData, setSolidData] = useState("")
   let [alert, _setAlert] = useState()
+
 
   /**
    * Creates an alert.
@@ -61,28 +66,6 @@ function App() {
       setTimeout(()=>_setAlert(""), alertDuration)
   }
 
-  const updateMapping = (content, value) => {
-    let provider = extractProviderFromMappingUrl(value);
-    // Store in local storage
-    localStorage.setItem(STORAGE_KEYS.MAPPING_URL, value);
-    localStorage.setItem(STORAGE_KEYS.MAPPING_CONTENT, content)
-
-    // Update mapping state
-    setMapping({content, value, provider})
-  }
-
-  const clearMapping = () => updateMapping('',null)
-
-  /**
-   * Fetches mapping content & updates mapping state variable
-   * @param url
-   * @returns {Promise<void>}
-   */
-  const updateMappingFromUrl = async (url) => {
-    fetch(url)
-        .then(readAndDecodeBody)
-        .then((data)=> updateMapping(data,url))
-  }
 
   // Default mapping. this is the first option that will be rendered in the mapping selector)
   const defaultMapping = {'value' : 'default', 'label' : 'Select a mapping'}
@@ -97,6 +80,7 @@ function App() {
     const processConfiguration = async () => {
       try {
         const configurationRecords = await getConfigurationRecords();
+        storage.configurationRecords.set(configurationRecords);
 
         optionRecords = createOptionRecordsFromConfigurationRecords(configurationRecords)
         console.log('option records: ', optionRecords)
@@ -109,62 +93,10 @@ function App() {
 
     }
 
-
     processConfiguration()
 
   },[])
-  // Fetch mappings-metadata using side-effects.
-  // This side-effect will be executed only once.
-  // useEffect(() => {
-  //   const fetchMappingsMetadata = async () => {
-  //     const urlMetaData = "/rml/mappings-metadata.json";
-  //     let mappingOptions = [];
-  //
-  //     try {
-  //       const response = await fetch(urlMetaData)
-  //
-  //       if(response.status !== 200 )
-  //         throw new Error('Error while getting the RML Mapping metadata...');
-  //
-  //       const body = await readAndDecodeBody(response)
-  //       const optionData = JSON.parse(body)
-  //       mappingOptions = [...createOptionRecordsFromMetaData(optionData)]
-  //
-  //     } catch (e) {
-  //       console.log(e.message)
-  //       const errMessage = e.message
-  //       setAlert(makeWarningAlert(errMessage))
-  //
-  //     } finally {
-  //       updateMappings(mappingOptions)
-  //     }
-  //   }
-  //
-  //   fetchMappingsMetadata();
-  // },[])
 
-
-  /**
-   * When triggered, the content of the selected mapping will be fetched and the state variable
-   * mappingContent will be updated accordingly.
-   * Note: the default mapping option does not refer to a mapping and will clear the mapping content.
-   * @param {*} e : event triggered when the user selected a mapping from the MappingSelector.
-   */
-  const handleOnMappingChange = async (e) => {
-
-    if(e.target.value !== 'default') {
-
-      const configurationRecords = await getConfigurationRecords();
-      const pipelineRecords = getPipelineRecords(configurationRecords);
-      console.log('pipeline records: ' , pipelineRecords)
-      const pipelineRecord = getConfigurationRecordById(configurationRecords,e.target.value)
-      console.log('currentlys elected pipeline record:  ', pipelineRecord);
-      // fetch contents and set the state variable mappingContent
-      // updateMappingFromUrl(e.target.value)
-    } else
-      // When selecting the default option (no mapping), clear the mapping.
-      clearMapping()
-  }
 
   /**
    * Checks with the backend whether the user is connected with the given provider (i.e. whether the user has already
@@ -178,6 +110,7 @@ function App() {
 
     // If provider is not connected, notify the user about it and redirect to the provider's authorization page
     if(!providerIsConnected) {
+
       console.log('provider is not connected --> redirecting!')
       let connectionUrl = await getConnectionUrlForProvider(provider)
       // Notify user
@@ -190,122 +123,11 @@ function App() {
       await setTimeout(()=>{
         window.location.href = connectionUrl
       }, 2500)
+    }else {
+      // storage.authorizationState.set(AUTHORIZATION_STATES.AUTHORIZED)
     }
   }
 
-
-  /**
-   * Handler that calls the backend to execute the selected mapping.
-   * Upon success, this will result in the generated output and provenance being set.
-   * @param {*} e
-   */
-  const handleOnExecute = async (e)=> {
-    console.log("@handleOnExecute")
-
-    if(localStorage.getItem(STORAGE_KEYS.EXECUTION_ATTEMPTS)) {
-      let count = parseInt(localStorage.getItem(STORAGE_KEYS.EXECUTION_ATTEMPTS));
-      count++;
-      localStorage.setItem(STORAGE_KEYS.EXECUTION_ATTEMPTS, count.toString());
-    }else {
-      localStorage.setItem(STORAGE_KEYS.EXECUTION_ATTEMPTS, '1');
-    }
-
-    console.log('executing mapping: ', mapping)
-    const config = await getConfigurationRecords()
-
-    if(false && mapping.value !== null) {
-      // Extract provider & filename from e.target.value
-      const [, provider, filename] = String(mapping.value).split('/')
-
-      // Provider connection
-      const providerIsConnected = await isProviderConnected(provider)
-      if(!providerIsConnected)
-        await handleProviderConnection(provider);
-      else {
-        // Solid connected?
-        let session = await handleSolidLogin();
-
-        if(session) {
-          // onSuccess callback for execute mapping call
-          const onSuccess = async (response) => {
-            if(response.status === 200){
-
-              let jsonData = null;
-
-              try {
-                const body = await readAndDecodeBody(response)
-                jsonData = JSON.parse(body)
-              } catch (e) {
-                const errMsg = `Error while processing result from RMLMapper. \n Error message: ${e}`
-                console.error(errMsg)
-                setAlert(makeWarningAlert(errMsg))
-              }
-
-              if(jsonData) {
-                let alertMessages = []
-
-                // Do we have RDF data?
-                if (jsonData.rdf && Object.keys(jsonData.rdf).length)
-                  setGeneratedOutput(jsonData.rdf)
-                else
-                  alertMessages.push('Generated RDF data is empty')
-
-                // Do we have prov data?
-                if(jsonData.prov && Object.keys(jsonData.prov).length)
-                  setProvenance(jsonData.prov)
-                else
-                  alertMessages.push('Provenance data is empty')
-
-                // If there are any messages, notify the user about them
-                if(alertMessages.length)
-                  setAlert(makeWarningAlert(alertMessages.join('\n')))
-                else {
-                  // No alert messages? That means we have both RDF & Provenance data, and we can push to Solid
-                  // TODO: refactor solid stuff to separate lib
-                  // Store the generated RDF onto the user's Solid POD
-                  const solidRequestParams = {
-                    method : 'PATCH',
-                    body : `INSERT DATA {${jsonData.rdf}}`,
-                    headers : {
-                      'Content-Type': 'application/sparql-update'
-                    }
-                  }
-
-                  await handleSolidOperation(solidRequestParams, (data)=>{
-                    setAlert(makeAlert('info', 'Mapping executed successfully!'), 5000)
-                    // Execution was successful so we can clean up the flags in the local storage
-                    localStorage.removeItem(STORAGE_KEYS.EXECUTION_ATTEMPTS)
-                  }, (err)=>{
-                    // Notify the user about any errors
-                    setAlert(makeWarningAlert('Error while executing request to Solid pod. Message: ' + e))
-                  })
-
-                }
-              }
-
-            } else {
-              console.error(response)
-              const errMessage = 'Something went wrong while executing the RML Mapping... ' +
-                  '\n Response status code: ' + response.status;
-
-              setAlert(makeWarningAlert(errMessage))
-            }
-          }
-
-          // onError callback for execute mapping call
-          const onError = (response) => {
-            // TODO: handle onError
-            console.error("request was unsuccessful: ", response)
-          }
-
-          // Call backend to execute the selected mapping
-          await executeMappingOnBackend(provider, filename, onSuccess, onError)
-        }
-      }
-    }else {
-      setAlert(makeAlert('warning', (<p>You need to select a mapping first!</p>)))
-    }
-  }
 
   /**
    * Fetches data from Solid Pod.
@@ -315,13 +137,20 @@ function App() {
    * @returns {Promise<void>}
    */
   const handleSolidFetch = async () => {
-    await handleSolidOperation({method:'GET'},async (response)=>{
-      const body = await readAndDecodeBody(response)
-      setSolidData(body)
-    }, (err)=>{
-      // Notify the user about any errors
-      setAlert(makeWarningAlert('Error while fetching data from Solid pod. Message: ' + err))
-    })
+    const configurationRecords = await getConfigurationRecords();
+    const pipelineRecord = getConfigurationRecordById(configurationRecords, storage.pipelineId.get())
+    const [solidConfiguration,] = filterRecordsByType(configurationRecords, 'solidConfiguration')
+    const currentStepRecord = pipelineRecord['steps'][storage.pipelineStep.get()]
+    const {output, forId} = currentStepRecord;
+    const relativePath = [solidConfiguration.storageDirectory, output.result].join('/');
+    await fetchFromSolidPod(relativePath,
+        async (response)=>{
+          const body = await readAndDecodeBody(response)
+          setSolidData(body)
+        },
+        (err)=>{
+          setAlert(makeWarningAlert('Error while fetching data from Solid pod. Message: ' + err))
+        })
   }
 
   /**
@@ -329,44 +158,80 @@ function App() {
    * @returns {Promise<void>}
    */
   const handleSolidClear = async () => {
-    await handleSolidOperation({
-      solidFetchParams: {method:'DELETE'},
-      onError: (err)=>{
-        // Notify the user about any errors
-        setAlert(makeWarningAlert('Error while clearing data on Solid pod. Message: ' + err))
-      }})
+    const configurationRecords = await getConfigurationRecords();
+    const pipelineRecord = getConfigurationRecordById(configurationRecords, storage.pipelineId.get())
+    const [solidConfiguration,] = filterRecordsByType(configurationRecords, 'solidConfiguration')
+    const currentStepRecord = pipelineRecord['steps'][storage.pipelineStep.get()]
+    const {output, forId} = currentStepRecord;
+    const relativePath = [solidConfiguration.storageDirectory, output.result].join('/');
+    await removeFromSolidPod(relativePath,
+        ()=>{
+          setAlert('info', 'Successfully removed file from Solid pod');
+        },
+        (err)=>{
+          setAlert(makeWarningAlert('Error while removing file from Solid pod. Message: ' + err))
+        }
+    )
     setSolidData('')
-  }
-
-  const handleDownload = (data) => {
-    console.log("@handleDownload -- data: " , data)
-  }
-
-  const trackSession = async () => {
-    console.log('@trackSession')
-    const ls = localStorage;
-    const sk = STORAGE_KEYS;
-
-    if(ls.getItem(sk.EXECUTION_ATTEMPTS)) {
-      // if execution was initiated, handle the execution
-      const executionAttemptCount = parseInt(ls.getItem(sk.EXECUTION_ATTEMPTS))
-      console.log('execution attempts: '  ,executionAttemptCount)
-      const MAX_EXECUTION_ATTEMPTS = 3
-      if(executionAttemptCount < MAX_EXECUTION_ATTEMPTS)
-        await handleOnExecute()
-      else {
-        setAlert(makeWarningAlert('Maximum execution attempts exceeded...'))
-        ls.removeItem(sk.EXECUTION_ATTEMPTS)
-      }
-    }
   }
 
   const renderedAlert = alert ? <Alert variant={alert.variant} data-test="alert-box">{alert.body}</Alert> : null;
 
-  useEffect(()=>{
-    trackSession()
-  }, [mapping])
 
+  //// --------------------------------------------------
+  let [isConnected, setIsConnected] = useState(false)
+
+  useEffect(()=>{
+
+
+
+
+    function providerConnection(provider){
+
+
+      return isConnected;
+    }
+
+
+  })
+
+
+  const trackExecution = async () => {
+    console.log('@trackSession')
+    storage.executionStatus.set(EXECUTION_STATES.BUSY)
+
+    const configurationRecords = storage.configurationRecords.get();
+    const currentPipelineId = storage.pipelineId.get();
+    const currentPipelineStep = storage.pipelineStep.get();
+
+    console.log('conf recs: ', configurationRecords);
+    console.log('current pipeline id', currentPipelineId);
+    console.log('current pipeline step: ', currentPipelineStep);
+    if(configurationRecords && currentPipelineId && currentPipelineStep) {
+      const {maximumAuthorizationAttempts} = getConfigurationRecordById(configurationRecords, 'auth-flow-config')
+      console.log('maximum authorization attempts : ', maximumAuthorizationAttempts)
+      const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
+      console.log('step record: ', stepRecord)
+      console.log('referent: ', referentRecord);
+      const {provider} = referentRecord
+      if(referentRecord['type'] === 'mapping') {
+        // check whether provider is connected
+        const providerIsConnected = await isProviderConnected(provider)
+        if(!providerIsConnected) {
+          storage.executionStatus.set(EXECUTION_STATES.AUTHORIZING)
+          let nrAttempts = storage.authorizationAttempts.get() | 0
+          nrAttempts+=1
+          storage.authorizationAttempts.set(nrAttempts);
+          console.log('i had to update nrattempts on local storage before calling hanling provider connection for provider:  ', provider)
+          await handleProviderConnection(provider);
+        }else {
+          storage.executionStatus.set(EXECUTION_STATES.AUTHORIZED)
+        }
+
+      }
+    }
+
+  }
 
   // Settings card that will be added as a child to the Transfer component
   const settingsCard = (
@@ -390,10 +255,9 @@ function App() {
       </CollapsibleCard>)
 
 
-
-
   // QUERY STUFF
   const engine = newEngine();
+  const [query, setQuery] = useState('')
   const [queryResult, setQueryResult] = useState('')
   const [queryRecords, setQueryRecords] = useState({})
   const [queryProvenance, setQueryProvenance] = useState('')
@@ -401,45 +265,19 @@ function App() {
   // Get queries from backend using side-effects.
   // This side-effect will be executed only once.
   useEffect(()=>{
-    getQueryRecords().then(setQueryRecords);
+    const parseQueryRecords = async () => {
+      const configurationRecords = await getConfigurationRecords()
+      const queryRecords = getQueryRecords(configurationRecords)
+      return queryRecords
+    }
+    parseQueryRecords().then(setQueryRecords)
   },[])
-
-  const createQueryButton = (qId, qRecord) => ( <Button
-      data-test={`query-button-${qId}`}
-      onClick={
-        async ()=>{
-
-          const onResult = async (result) => {
-            setQueryResult(result)
-
-            // Store result on Solid Pod
-            const transferConfiguration = await getTransferConfiguration();
-            const transferStorageDirectory = transferConfiguration['solid']['storageDirectory'];
-            const transferFilename = transferConfiguration['solid']['transferFilename'];
-            const relativePath = [transferStorageDirectory, transferFilename].join('/')
-
-            await storeRDFDataOnSolidPod(result, relativePath, (success)=>{},(error)=>{
-              setAlert(makeWarningAlert(error.toString()))
-            })
-          }
-
-          const onMetadataAvailable = (metadata) =>
-            setQueryProvenance(JSON.stringify(metadata, null, 2))
-
-
-          const onError = (err) =>
-              setAlert(makeWarningAlert(`Error while executing query (query id: ${qId})\nError: ${err}`))
-
-          // Run query
-          await runQuery(engine, qRecord.query, onResult,onMetadataAvailable, onError)
-        }
-      }>
-    {qRecord.description}
-  </Button>) ;
 
   const queryCard = ( <CollapsibleCard id="card-query" header="Query" headerId="card-header-query">
     <>
-      {(queryRecords)?Object.entries(queryRecords).map(entry=> createQueryButton(...entry)) : null }
+      Query
+      <SyntaxHighlighter data-test="query">{query}</SyntaxHighlighter>
+      Query result
       <SyntaxHighlighter data-test="query-result">{queryResult}</SyntaxHighlighter>
       Query provenance
       <SyntaxHighlighter data-test="query-provenance">{queryProvenance}</SyntaxHighlighter>
@@ -448,39 +286,65 @@ function App() {
 
   </CollapsibleCard>)
 
-
   // PIPELINE STUFF
 
   /**
-   * Handler for when the pipeline selection has changed
-   * @param e
+   * When triggered, the content of the pipeline's first mapping will be fetched and the state variable
+   * mappingContent will be updated accordingly.
+   * Note: the default mapping option does not refer to a mapping and will clear the mapping content.
+   * @param {*} e : event triggered when the user selected a mapping from the MappingSelector.
    */
-  const handleOnPipelineSelectionChanged = async (e) => {
-    console.log(`handleSelectionChanged for ${e.target.value}`)
-    const currentPipelineId = e.target.value
+  const handleOnPipelineSelectionChanged = async (currentPipelineId) => {
+    // When changing selection, clear ui components
+    setQuery('')
+    setGeneratedOutput('')
+    setProvenance('')
+    setSelectedOptionId(currentPipelineId)
+    setMapping({content:''})
+
+    // Get & process configuration records for current selection
     const configurationRecords = await getConfigurationRecords()
     const pipelineRecordIds = getPipelineRecords(configurationRecords).map(pr=>pr.id)
 
     if(pipelineRecordIds.includes(currentPipelineId)) {
-      setSelectedPipeline(currentPipelineId)
+      storage.pipelineId.set(currentPipelineId)
       const pipelineRecord = getConfigurationRecordById(configurationRecords, currentPipelineId);
       validatePipelineRecord(pipelineRecord);
 
       // For now, we only consider the first step
-      setCurrentPipelineStep(0);
-      const currentPipelineStepindex = getCurrentPipelineStep();
+      storage.pipelineStep.set(0);
+      const currentPipelineStepindex = storage.pipelineStep.get();
+
       const stepRecord = pipelineRecord['steps'][currentPipelineStepindex]
       validateStepRecord(stepRecord)
-      if(!stepRecord['type'] === 'mappingConfiguration')
-        throw Error('First step record should be a mapping configuration');
 
-      const mappingId = stepRecord['forId'];
-      const mappingRecord = getConfigurationRecordById(configurationRecords, mappingId);
-      console.log('mapping record: ' , mappingRecord)
-      updateMappingFromUrl(mappingRecord.file)
+      // Get the record to which forId refers
+      const forId = stepRecord['forId'];
+      const referentRecord = getConfigurationRecordById(configurationRecords, forId);
 
+      // Fetch the file corresponding to the current step record
+      const response = await fetch(referentRecord.file);
+      const body = await readAndDecodeBody(response)
+
+      switch (referentRecord['type']) {
+        case 'mapping':
+          // Update local storage
+          storage.mappingContent.set(body);
+          // Update ui
+          setMapping({
+            content:body,
+            value:currentPipelineId,
+            provider:referentRecord['provider']})
+          break;
+        case 'query':
+          // Update ui
+          setQuery(body)
+          break;
+        default:
+          // TODO: default ?
+      }
     }else{
-      removePipelineVariablesFromStorage()
+      storage.removePipelineVariablesFromStorage()
     }
   }
 
@@ -489,8 +353,9 @@ function App() {
    * TODO: support execution of multiple steps
    * @param e
    */
-  const handleOnExecutePipeline =async (e) => {
+  const handleOnExecutePipeline =async () => {
     console.log('@handleOnExecutePipeline!!!')
+    // storage.executionState.set(EXECUTION_STATES.BUSY)
     const configurationRecords = await getConfigurationRecords()
 
     // Get solid configuration
@@ -498,26 +363,24 @@ function App() {
     const storageDirectory = solidConfiguration['storageDirectory'];
 
     // Get pipeline configuration
-    const currentPipelineId = getSelectedPipeline()
+    const currentPipelineId = storage.pipelineId.get()
     const pipelineRecord = getConfigurationRecordById(configurationRecords, currentPipelineId)
 
     // Step
-    const currentPipelineStepIndex = getCurrentPipelineStep();
+    const currentPipelineStepIndex = storage.pipelineStep.get();
     const currentStepRecord = pipelineRecord['steps'][currentPipelineStepIndex];
     const referentRecord = getConfigurationRecordById(configurationRecords, currentStepRecord['forId'])
 
-    if(referentRecord['type'] === 'mapping') {
-      const {provider, file} = referentRecord
-
+    const executeMappingStep = async ({provider, file}) => {
       // If provider isn't connected yet, handle that first
       const providerConnected = await isProviderConnected(provider)
-      if(!providerConnected)
-        await handleProviderConnection(provider)
+      // if(!providerConnected)
+      //   await handleProviderConnection(provider)
 
       // If Solid isn't connected yet, handle that first
-      let solidSession = await handleSolidLogin();
-      if(!solidSession)
-        await handleSolidLogin();
+      let solidSession = await getOrEstablishSolidSession();
+      // if(!solidSession)
+      //   await getOrEstablishSolidSession();
 
       // If provider connect & logged in to solid
       if(providerConnected && solidSession) {
@@ -586,24 +449,89 @@ function App() {
           else alertMessages.push('Provenance data is empty')
 
         }
-
-        if(alertMessages.length>0) {
+        if(alertMessages.length === 0) {
+          // storage.executionState.set(EXECUTION_STATES.DONE);
+        }
+        else {
           setAlert(makeAlert('warning', alertMessages.join('\n')))
         }
       }
-
 
       // Output
       console.log(`pipelineRecord: `, pipelineRecord);
       const pipelineOutput = pipelineRecord['output'];
       console.log('output: ', pipelineOutput)
-
     }
 
+    const executeQueryStep = async(queryRecord, input, output)=> {
+      console.log('@executeQueryStep')
+      // If Solid isn't connected yet, handle that first
+      let solidSession = await getOrEstablishSolidSession();
+      if(!solidSession)
+        await getOrEstablishSolidSession();
 
+      const podUrl = new URL(solidSession.webId).origin
+
+      // Fetch query
+      const response = await fetch(queryRecord['file'])
+      const query = await readAndDecodeBody(response)
+
+
+      // Store result on Solid Pod
+      // Create URLs for generated result & corresponding provenance data
+      const outputConfiguration = currentStepRecord['output'];
+      const relativePathResult = [storageDirectory, outputConfiguration['result']].join('/')
+      const urlResult = new URL(relativePathResult, podUrl).toString()
+
+      // Callback for the query result returned by the engine
+      const onResult = async (result) => {
+        setQueryResult(result)
+
+        // Store result on the Solid Pod
+        await storeOnSolidPod(urlResult,
+            result,
+            ()=> setAlert(makeAlert('info', 'Query result stored on Solid pod!')),
+            (err)=>setAlert(makeWarningAlert(err.toString())))
+      }
+
+      // Callback for rendering the query result's metadata (if available)
+      const onMetadataAvailable = async (metadata) => {
+        const strQueryProvenance = JSON.stringify(metadata, null, 2)
+        setQueryProvenance(strQueryProvenance)
+        // TODO: Store provenance on the Solid Pod
+      }
+
+
+
+      const onError = (err) => {
+        // storage.executionState.set(EXECUTION_STATES.FAILED)
+        setAlert(makeWarningAlert(`Error while executing query (query id: ${queryRecord['id']})\nError: ${err}`))
+      }
+
+
+      // Run query
+      const sources = input.map(inputFilename => urlJoin(podUrl, storageDirectory, inputFilename))
+      await executeQuery(engine, query, sources, onResult,onMetadataAvailable,onError)
+    }
+
+    try {
+      switch (referentRecord['type']) {
+        case 'mapping':
+          await executeMappingStep(referentRecord)
+          break;
+        case 'query':
+          const {input, output} = currentStepRecord;
+          await executeQueryStep(referentRecord, input, output)
+          break;
+        default:
+          setAlert(makeWarningAlert('Unknown type of pipeline step record'))
+      }
+    }catch (err) {
+      // storage.executionState.set(EXECUTION_STATES.FAILED)
+      setAlert(makeWarningAlert('Error while executing...'))
+    }
 
   }
-
 
   return (
     <div className="App container">
@@ -612,21 +540,30 @@ function App() {
       <Transfer
           mappings={mappingOptions}
           mappingContent={mapping.content}
-          selectedOptionValue={mapping.value}
+          selectedOptionValue={selectedOptionId}
           generatedOutput={generatedOutput}
           provenance={provenance}
           solidData={solidData}
-          handleOnExecute={handleOnExecute}
-          handleOnMappingChange={handleOnMappingChange}
+          handleOnExecute={()=>{
+            trackExecution()
+          }}
+          handleOnMappingChange={(e)=>{
+            if(e.target.value === 'default' ) {
+              // if default option selected, clear mapping & provenance
+              setMapping({value:'default', content:'', provider:'' })
+              setProvenance('')
+            }else {
+              handleOnPipelineSelectionChanged(e.target.value)
+            }
+          }}
           handleSolidFetch={handleSolidFetch}
           handleSolidClear={handleSolidClear}
           handleSolidLogout={handleSolidLogout}
-          handleDownload={handleDownload}
           data-cy="transfercomp"
       >
-        {settingsCard}
         {queryCard}
-        {pipelineSelectorCard}
+        {settingsCard}
+
 
       </Transfer>
     </div>

@@ -1,6 +1,6 @@
 /// <reference types="Cypress" />
 
-import { createOptionRecordsFromMetaData } from './helpers'
+import {createOptionRecordsFromConfigurationRecords, filterRecordsByType} from "../../src/lib/configuration-helpers";
 
 
 describe('Transfer Component', {retries:3}, () => {
@@ -34,15 +34,23 @@ describe('Transfer Component', {retries:3}, () => {
     }
     beforeEach(() => {
 
-        cy.intercept('GET', '/rml/mappings-metadata.json', {fixture : 'mappings-metadata.json'})
+        cy.intercept('GET', '/configuration/configuration.json', {fixture: 'configuration.json'})
+        //
+        // cy
+        //     .intercept('GET', '/configuration/queries.json', {fixture: 'queries.json'})
+        //     .as('queries');
 
-        cy.intercept('GET', '/configuration/queries.json', {fixture: 'queries.json'}).as('queries');
-
+        cy
+            .fixture('configuration')
+            .then((config)=>config['configurationRecords'])
+            .then((records)=>filterRecordsByType(records, 'query'))
+            .as('queries')
         cy.visit('/')
 
         cy
-            .fixture('mappings-metadata')
-            .then(createOptionRecordsFromMetaData, (error) => console.log("error while creating options from metadata"))
+            .fixture('configuration')
+            .then((config)=>config['configurationRecords'])
+            .then(createOptionRecordsFromConfigurationRecords, (error) => console.log("error while creating options from metadata"))
             .then(options => [{ value: 'default' }, ...options])
             .as('optionRecords')
 
@@ -125,7 +133,7 @@ describe('Transfer Component', {retries:3}, () => {
 
     })
 
-    it('Correctly renders the Query card',()=>{
+    it.only('Correctly renders the Query card',()=>{
         // Test whether the query card exists
         cy.get('[data-test=card-query]').log('Query card exists');
 
