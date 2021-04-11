@@ -28,17 +28,18 @@ import {
 } from "./lib/configuration-helpers";
 
 import * as storage from "./lib/storage";
+import {EXECUTION_STATES} from "./lib/storage";
 
 import {
   fetchFromSolidPod,
   getOrEstablishSolidSession,
+  getSolidSession,
   handleSolidLogout,
   removeFromSolidPod,
   storeOnSolidPod
 } from "./lib/solid-helpers";
 import {executeQuery} from "./lib/query-helpers";
 import urlJoin from "proper-url-join";
-import {AUTHORIZATION_STATES, EXECUTION_STATES} from "./lib/storage";
 
 
 function App() {
@@ -177,20 +178,46 @@ function App() {
 
   const renderedAlert = alert ? <Alert variant={alert.variant} data-test="alert-box">{alert.body}</Alert> : null;
 
-  const trackExecution = async () => {
-    console.log('@trackSession')
-    storage.executionStatus.set(EXECUTION_STATES.BUSY)
+  const useIterator = (items = [], initialIndex = 0) => {
+    const [i, setIndex] = useState(initialIndex);
+    const next = () => {
+      setIndex(i+1)
+    }
 
-    const configurationRecords = storage.configurationRecords.get();
-    const currentPipelineId = storage.pipelineId.get();
-    const currentPipelineStep = storage.pipelineStep.get();
+    if(i < items.length)
+      return [items[i], next]
 
-    console.log('conf recs: ', configurationRecords);
-    console.log('current pipeline id', currentPipelineId);
-    console.log('current pipeline step: ', currentPipelineStep);
-
-
+    return [null, null]
   }
+  //
+  // const trackExecution = async () => {
+  //   console.log('@trackSession')
+  //   storage.executionStatus.set(EXECUTION_STATES.BUSY)
+  //
+  //   const configurationRecords = storage.configurationRecords.get();
+  //   const currentPipelineId = storage.pipelineId.get();
+  //   const currentPipelineStep = storage.pipelineStep.get();
+  //
+  //   console.log('conf recs: ', configurationRecords);
+  //   console.log('current pipeline id', currentPipelineId);
+  //   console.log('current pipeline step: ', currentPipelineStep);
+  //
+  //   const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
+  //   console.log('step record: ', stepRecord)
+  //   console.log('referent record: ', referentRecord)
+  //
+  //
+  //   switch (referentRecord['type']) {
+  //     case 'mapping':
+  //
+  //       break;
+  //     case 'query':
+  //       // TODO:
+  //       break;
+  //     default:
+  //       throw Error('Unknown step record type: ' , referentRecord['type'])
+  //   }
+  // }
 
   // Settings card that will be added as a child to the Transfer component
   const settingsCard = (
@@ -488,6 +515,289 @@ function App() {
 
   }
 
+  ///////////////////////////////////////////////////////////////////////////
+  // ************ EXECUTION TRACKING STUFF *******************
+
+  //////////////////
+  // State variables
+
+  // Execution status
+  const [executionStatus, _setExecutionStatus] = useState(storage.executionStatus.get());
+  const setExecutionStatus = (status) => {
+    storage.executionStatus.set(status);
+    _setExecutionStatus(status);
+  }
+
+  // Execution iteration: contains the index and number of retries
+  const [preconditionCheckIterations, _setPreconditionCheckIterations] = useState(storage.preconditionCheckIteration.get())
+  const setExecutionIteration = (it) => {
+    storage.preconditionCheckIteration.set(it);
+    _setPreconditionCheckIterations(it)
+  }
+
+  // Iteration Items (functions)
+  const [iterationPreconditionFunctions, setIterationItems] = useState();
+
+
+  const createExecutionPreconditionIterationsForMappingExecution = (referentRecord)  => {
+
+    // Solid
+    const checkSolidConnection = async () => {
+      console.log('@iterationPreconditionFunction: solid');
+      const isSolidConnected = await getSolidSession();
+
+      return !!isSolidConnected
+    }
+    const establishSolidConnection = async ()=> {
+      await getOrEstablishSolidSession();
+    }
+
+    // Provider
+    const {provider, file} = referentRecord;
+    const checkProviderConnection = async () => {
+      console.log('@iterationPreconditionFunction: provider');
+      const providerConnected = await isProviderConnected(provider);
+      return providerConnected
+    }
+    const establishProviderConnection = async () => {
+      await handleProviderConnection(provider)
+    }
+
+    return [
+      {
+        checkPrecondition: checkSolidConnection,
+        establishPrecondition: establishSolidConnection
+      },
+      {
+        checkPrecondition: checkProviderConnection,
+        establishPrecondition: establishProviderConnection
+      }
+    ]
+  }
+
+  // Execution Status side-effect
+  useEffect(() => {
+    function preconditionChecks() {
+      const configurationRecords = storage.configurationRecords.get();
+      if(configurationRecords) {
+        const currentPipelineId = storage.pipelineId.get();
+        const currentPipelineStep = storage.pipelineStep.get();
+        const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
+        console.log('step record: ', stepRecord)
+        console.log('referent record: ', referentRecord)
+
+        switch (referentRecord['type']) {
+          case 'mapping':
+            if(!iterationPreconditionFunctions) {
+              console.log('iterationItems undefined, ... initializing now');
+              const items = createExecutionPreconditionIterationsForMappingExecution(referentRecord);
+              setIterationItems(items);
+            }
+
+            setExecutionIteration({index:0, retries: 0})
+            break;
+          case 'query':
+            // TODO:
+            throw Error('NOT IMPLEMENTED YET: precondition checks for query step');
+
+          default:
+            throw Error('Unknown step record type: ' , referentRecord['type'])
+        }
+
+      }else {
+        console.error('THE CONFIGURATION RECORDS IN STORAGE ARE NULL/UNDEFINED!??')
+      }
+    }
+
+    async function executeStep() {
+      const configurationRecords = storage.configurationRecords.get();
+      if(configurationRecords) {
+        const currentPipelineId = storage.pipelineId.get();
+        const currentPipelineStep = storage.pipelineStep.get();
+        const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
+
+        // Get solid configuration
+        const solidConfiguration = await getConfigurationRecordById(configurationRecords, 'solid-config');
+        const storageDirectory = solidConfiguration['storageDirectory'];
+
+        console.log('step record: ', stepRecord)
+        console.log('referent record: ', referentRecord)
+
+        switch (referentRecord['type']) {
+          case 'mapping':
+            console.log('going to execute mapping step');
+            const {provider, file} = referentRecord;
+            console.log('provider: ' , provider)
+            // Execute the mapping
+            const params = {provider, file}
+            const response =  await fetch('/rmlmapper', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(params)
+            })
+
+            // Parse & process result
+            const parsedResponse = await tryParseJsonResponse(response)
+
+            let alertMessages = []
+
+            if(parsedResponse.success) {
+              const {rdf, prov} = parsedResponse.body
+
+              // Create URLs to generated result and corresponding provenance
+              const outputConfiguration = stepRecord['output'];
+              const solidSession = await getSolidSession();
+              const podUrl = new URL(solidSession.webId).origin
+
+              // Do we have RDF data?
+              if(rdf) {
+                setGeneratedOutput(rdf)
+
+                // Create url to store generated result on solid pod
+                const filenameResult = outputConfiguration.result;
+                if(filenameResult) {
+                  const relativePathResult = [storageDirectory, outputConfiguration.result].join('/')
+                  const urlRDFData = new URL(relativePathResult, podUrl).toString()
+
+                  await storeOnSolidPod(urlRDFData,
+                      rdf,
+                      ()=>setAlert(makeAlert('info', 'Successfully stored generated result on Solid pod!!')),
+                      (err)=>setAlert(makeWarningAlert('Error while storing result on Solid Pod'))
+                  )
+                }else {
+                  setAlert(makeWarningAlert('No filepath specified for storing the generated RDF data on the Solid pod'))
+                }
+
+              }
+              else alertMessages.push('Generated RDF data is empty')
+
+              // Do we have prov data?
+              if(prov) {
+                setProvenance(prov)
+                // Create url to store corresponding provenance data on solid pod
+                const filenameProvenanceResult = outputConfiguration.provenanceResult
+                if(filenameProvenanceResult) {
+                  const relativePathProv = [storageDirectory, filenameProvenanceResult].join('/')
+                  const urlProv = new URL(relativePathProv, podUrl).toString()
+
+                  await storeOnSolidPod(urlProv,
+                      prov,
+                      ()=>setAlert(makeAlert('info', 'Successfully stored provenance data on Solid Pod')),
+                      (err)=>setAlert(makeWarningAlert('Error while storing provenance data on Solid Pod'))
+                  );
+                }else {
+                  setAlert(makeWarningAlert('No filepath specified for storing the provenance data on the Solid pod'))
+                }
+              }
+              else alertMessages.push('Provenance data is empty')
+            }
+            // Do we need to notify the user about something that happened during the execution?
+            if(alertMessages.length === 0) {
+              setExecutionStatus(EXECUTION_STATES.DONE);
+            }
+            else {
+              setAlert(makeAlert('warning', alertMessages.join('\n')))
+            }
+
+            break;
+          case 'query':
+            // TODO:
+            throw Error('NOT IMPLEMENTED YET: execution  for query step');
+
+          default:
+            throw Error('Unknown step record type: ' , referentRecord['type'])
+        }
+
+      }else {
+        console.error('THE CONFIGURATION RECORDS IN STORAGE ARE NULL/UNDEFINED!??')
+      }
+    }
+
+    // The execution state of a pipeline step can adopt multiple states.
+    // Such a step can either be the execution of a mapping or query.
+    switch (executionStatus) {
+      case EXECUTION_STATES.PRECONDITION_CHECKS:
+        console.log('useEffect: executionStatus changed and it changed to PRECONDITION_CHECKS');
+        // All preconditions of the current pipeline step are being checked prior to starting its execution.
+        // When precondition checks fail, they will be re-checked for a limited number of times (retries)
+        preconditionChecks();
+        break;
+
+      case EXECUTION_STATES.INIT_EXECUTION:
+        console.log('useEffect: executionStatus changed and it changed to INIT_EXECUTION');
+        // This state occurs when the execution of a pipeline step is initialized.
+        executeStep();
+        break;
+      case EXECUTION_STATES.EXECUTING:
+        console.log('useEffect: executionStatus changed and it changed to EXECUTING');
+        // TODO: evaluate whether this executing state is useful. Perhaps retrying the execution?
+
+        break;
+      case EXECUTION_STATES.DONE:
+        console.log('useEffect: executionStatus changed and it changed to DONE');
+        // The execution of the current pipeline step is done.
+        break;
+      default:
+        console.log('unknown executionStatus: ', executionStatus)
+    }
+
+
+  }, [executionStatus])
+
+  // Execution Iterator Index side-effect
+  useEffect(()=>{
+    console.log('useEffect: preconditionCheckIterations changed to: ', preconditionCheckIterations)
+
+    if(!iterationPreconditionFunctions)
+      return;
+
+    if(!preconditionCheckIterations)
+      return;
+
+    async function trackPreconditionCheckIterations() {
+      const {index,retries} = preconditionCheckIterations;
+      const MAX_RETRIES = 10; // TODO: fetch from configuration records
+
+      if(index < iterationPreconditionFunctions.length) {
+        if(retries < MAX_RETRIES) {
+
+          try {
+            const {checkPrecondition, establishPrecondition} = iterationPreconditionFunctions[index];
+            console.log('current number of retries: ', retries);
+            const preconditionOk = await checkPrecondition()
+            console.log('preconditionOk: ', preconditionOk);
+
+            if(preconditionOk) {
+              // Precondition met, we can go to the next execution iteration
+              setExecutionIteration({index: index+1,  retries:0})
+            }else {
+              // Precondition not met
+              await establishPrecondition();
+              setExecutionIteration({index,  retries:retries+1})
+            }
+          } catch (err) {
+            console.log('Error during precondition check... Error: ', err)
+            // TODO: show alert
+          }
+
+        }else {
+          console.warn('EXCEEDED MAX NUMBER OF RETRIES FOR CURRENT PRECONDITION CHECK')
+          // TODO: show alert
+        }
+      }else {
+        // Precondition check iterations finished
+        console.log('precondition iterations FINISHED!');
+        setExecutionStatus(EXECUTION_STATES.INIT_EXECUTION)
+
+      }
+
+    }
+    trackPreconditionCheckIterations()
+
+  },[preconditionCheckIterations])
+
   return (
     <div className="App container">
       <h1>PROV4ITDaTa-DAPSI</h1>
@@ -500,7 +810,7 @@ function App() {
           provenance={provenance}
           solidData={solidData}
           handleOnExecute={()=>{
-            trackExecution()
+            setExecutionStatus(EXECUTION_STATES.PRECONDITION_CHECKS)
           }}
           handleOnMappingChange={(e)=>{
             if(e.target.value === 'default' ) {

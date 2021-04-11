@@ -1,5 +1,10 @@
 import auth from "solid-auth-client";
 
+export const getSolidSession = async () => {
+    const session = await auth.currentSession();
+    return session;
+}
+
 export const getOrEstablishSolidSession = async () => {
     let session = await auth.currentSession();
 
