@@ -177,25 +177,6 @@ function App() {
 
   const renderedAlert = alert ? <Alert variant={alert.variant} data-test="alert-box">{alert.body}</Alert> : null;
 
-
-  //// --------------------------------------------------
-  let [isConnected, setIsConnected] = useState(false)
-
-  useEffect(()=>{
-
-
-
-
-    function providerConnection(provider){
-
-
-      return isConnected;
-    }
-
-
-  })
-
-
   const trackExecution = async () => {
     console.log('@trackSession')
     storage.executionStatus.set(EXECUTION_STATES.BUSY)
@@ -207,29 +188,7 @@ function App() {
     console.log('conf recs: ', configurationRecords);
     console.log('current pipeline id', currentPipelineId);
     console.log('current pipeline step: ', currentPipelineStep);
-    if(configurationRecords && currentPipelineId && currentPipelineStep) {
-      const {maximumAuthorizationAttempts} = getConfigurationRecordById(configurationRecords, 'auth-flow-config')
-      console.log('maximum authorization attempts : ', maximumAuthorizationAttempts)
-      const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
-      console.log('step record: ', stepRecord)
-      console.log('referent: ', referentRecord);
-      const {provider} = referentRecord
-      if(referentRecord['type'] === 'mapping') {
-        // check whether provider is connected
-        const providerIsConnected = await isProviderConnected(provider)
-        if(!providerIsConnected) {
-          storage.executionStatus.set(EXECUTION_STATES.AUTHORIZING)
-          let nrAttempts = storage.authorizationAttempts.get() | 0
-          nrAttempts+=1
-          storage.authorizationAttempts.set(nrAttempts);
-          console.log('i had to update nrattempts on local storage before calling hanling provider connection for provider:  ', provider)
-          await handleProviderConnection(provider);
-        }else {
-          storage.executionStatus.set(EXECUTION_STATES.AUTHORIZED)
-        }
 
-      }
-    }
 
   }
 
@@ -463,12 +422,8 @@ function App() {
       console.log('output: ', pipelineOutput)
     }
 
-    const executeQueryStep = async(queryRecord, input, output)=> {
+    const executeQueryStep = async(queryRecord, input, output, solidSession)=> {
       console.log('@executeQueryStep')
-      // If Solid isn't connected yet, handle that first
-      let solidSession = await getOrEstablishSolidSession();
-      if(!solidSession)
-        await getOrEstablishSolidSession();
 
       const podUrl = new URL(solidSession.webId).origin
 
