@@ -334,134 +334,213 @@ function App() {
     }
   }
 
-  /**
-   * Handler for executing the selected pipeline
-   * TODO: support execution of multiple steps
-   * @param e
-   */
-  const handleOnExecutePipeline =async () => {
-    console.log('@handleOnExecutePipeline!!!')
-    // storage.executionState.set(EXECUTION_STATES.BUSY)
-    const configurationRecords = await getConfigurationRecords()
+  ///////////////////////////////////////////////////////////////////////////
+  // ************ EXECUTION TRACKING STUFF *******************
 
-    // Get solid configuration
-    const solidConfiguration = await getConfigurationRecordById(configurationRecords, 'solid-config');
-    const storageDirectory = solidConfiguration['storageDirectory'];
+  //////////////////
+  // State variables
 
-    // Get pipeline configuration
-    const currentPipelineId = storage.pipelineId.get()
-    const pipelineRecord = getConfigurationRecordById(configurationRecords, currentPipelineId)
+  // Execution status
+  const [executionStatus, _setExecutionStatus] = useState(storage.executionStatus.get());
+  const setExecutionStatus = (status) => {
+    storage.executionStatus.set(status);
+    _setExecutionStatus(status);
+  }
 
-    // Step
-    const currentPipelineStepIndex = storage.pipelineStep.get();
-    const currentStepRecord = pipelineRecord['steps'][currentPipelineStepIndex];
-    const referentRecord = getConfigurationRecordById(configurationRecords, currentStepRecord['forId'])
+  // Execution iteration: contains the index and number of retries
+  const [preconditionCheckIterations, _setPreconditionCheckIterations] = useState(storage.preconditionCheckIteration.get())
+  const setPreconditionCheckIterations = (it) => {
+    storage.preconditionCheckIteration.set(it);
+    _setPreconditionCheckIterations(it)
+  }
 
-    const executeMappingStep = async ({provider, file}) => {
-      // If provider isn't connected yet, handle that first
-      const providerConnected = await isProviderConnected(provider)
-      // if(!providerConnected)
-      //   await handleProviderConnection(provider)
+  // Iteration Items (functions)
+  const [iterationPreconditionFunctions, setIterationItems] = useState();
 
-      // If Solid isn't connected yet, handle that first
-      let solidSession = await getOrEstablishSolidSession();
-      // if(!solidSession)
-      //   await getOrEstablishSolidSession();
+  // Execution Status side-effect
+  useEffect(() => {
+    function preconditionChecks() {
+      const configurationRecords = storage.configurationRecords.get();
+      if(configurationRecords) {
+        const currentPipelineId = storage.pipelineId.get();
+        const currentPipelineStep = storage.pipelineStep.get();
+        const {referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
 
-      // If provider connect & logged in to solid
-      if(providerConnected && solidSession) {
+        // Precondition check functions
+        // Solid
+        const checkSolidConnection = async () => {
+          console.log('@iterationPreconditionFunction: solid');
+          const isSolidConnected = await getSolidSession();
 
-        // Execute the mapping
-        const params = {provider, file}
-        const response =  await fetch('/rmlmapper', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(params)
-        })
+          return !!isSolidConnected
+        }
+        const establishSolidConnection = async ()=> {
+          await getOrEstablishSolidSession();
+        }
 
-        // Parse & process result
-        const parsedResponse = await tryParseJsonResponse(response)
+        // Provider
+        const {provider} = referentRecord;
+        const checkProviderConnection = async () => {
+          console.log('@iterationPreconditionFunction: provider');
+          const providerConnected = await isProviderConnected(provider);
+          return providerConnected
+        }
+        const establishProviderConnection = async () => {
+          await handleProviderConnection(provider)
+        }
 
-        let alertMessages = []
-        if(parsedResponse.success) {
-          const {rdf, prov} = parsedResponse.body
-
-          // Create URLs to generated result and corresponding provenance
-          const outputConfiguration = currentStepRecord['output'];
-          const podUrl = new URL(solidSession.webId).origin
-
-          // Do we have RDF data?
-          if(rdf) {
-            setGeneratedOutput(rdf)
-
-            // Create url to store generated result on solid pod
-            const filenameResult = outputConfiguration.result;
-            if(filenameResult) {
-              const relativePathResult = [storageDirectory, outputConfiguration.result].join('/')
-              const urlRDFData = new URL(relativePathResult, podUrl).toString()
-
-              await storeOnSolidPod(urlRDFData,
-                  rdf,
-                  ()=>setAlert(makeAlert('info', 'Successfully stored generated result on Solid pod!!')),
-                  (err)=>setAlert(makeWarningAlert('Error while storing result on Solid Pod'))
-              )
-            }else {
-              setAlert(makeWarningAlert('No filepath specified for storing the generated RDF data on the Solid pod'))
+        switch (referentRecord['type']) {
+          case 'mapping':
+            if(!iterationPreconditionFunctions) {
+              console.log('iterationItems undefined, ... initializing now');
+              const items = [
+                {
+                  checkPrecondition: checkSolidConnection,
+                  establishPrecondition: establishSolidConnection
+                },
+                {
+                  checkPrecondition: checkProviderConnection,
+                  establishPrecondition: establishProviderConnection
+                }
+              ]
+              setIterationItems(items);
             }
 
-          }
-          else alertMessages.push('Generated RDF data is empty')
+            setPreconditionCheckIterations({index:0, retries: 0})
+            break;
 
-          // Do we have prov data?
-          if(prov) {
-            setProvenance(prov)
-            // Create url to store corresponding provenance data on solid pod
-            const filenameProvenanceResult = outputConfiguration.provenanceResult
-            if(filenameProvenanceResult) {
-              const relativePathProv = [storageDirectory, filenameProvenanceResult].join('/')
-              const urlProv = new URL(relativePathProv, podUrl).toString()
-
-              await storeOnSolidPod(urlProv,
-                  prov,
-                  ()=>setAlert(makeAlert('info', 'Successfully stored provenance data on Solid Pod')),
-                  (err)=>setAlert(makeWarningAlert('Error while storing provenance data on Solid Pod'))
-              );
-            }else {
-              setAlert(makeWarningAlert('No filepath specified for storing the provenance data on the Solid pod'))
+          case 'query':
+            if(!iterationPreconditionFunctions) {
+              console.log('iterationItems undefined, ... initializing now');
+              const items = [
+                {
+                  checkPrecondition: checkSolidConnection,
+                  establishPrecondition: establishSolidConnection
+                }
+              ]
+              setIterationItems(items);
             }
-          }
-          else alertMessages.push('Provenance data is empty')
 
+            setPreconditionCheckIterations({index:0, retries: 0})
+            break;
+          default:
+            throw Error('Unknown step record type: ' , referentRecord['type'])
         }
-        if(alertMessages.length === 0) {
-          // storage.executionState.set(EXECUTION_STATES.DONE);
-        }
-        else {
-          setAlert(makeAlert('warning', alertMessages.join('\n')))
-        }
+
+      }else {
+        console.error('THE CONFIGURATION RECORDS IN STORAGE ARE NULL/UNDEFINED!??')
       }
-
-      // Output
-      console.log(`pipelineRecord: `, pipelineRecord);
-      const pipelineOutput = pipelineRecord['output'];
-      console.log('output: ', pipelineOutput)
     }
 
-    const executeQueryStep = async(queryRecord, input, output, solidSession)=> {
-      console.log('@executeQueryStep')
+    const executeMappingStep = async () => {
+      const configurationRecords = storage.configurationRecords.get();
+      const currentPipelineId = storage.pipelineId.get();
+      const currentPipelineStep = storage.pipelineStep.get();
 
+      const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
+
+      // Get solid configuration
+      const solidConfiguration = await getConfigurationRecordById(configurationRecords, 'solid-config');
+      const storageDirectory = solidConfiguration['storageDirectory'];
+      const solidSession = await getSolidSession();
+      const podUrl = new URL(solidSession.webId).origin
+
+      console.log('going to execute mapping step');
+      const {provider, file} = referentRecord;
+      console.log('provider: ' , provider)
+      // Execute the mapping
+      const params = {provider, file}
+      const response =  await fetch('/rmlmapper', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(params)
+      })
+
+      // Parse & process result
+      const parsedResponse = await tryParseJsonResponse(response)
+
+      let alertMessages = []
+
+      if(parsedResponse.success) {
+        const {rdf, prov} = parsedResponse.body
+
+        // Create URLs to generated result and corresponding provenance
+        const outputConfiguration = stepRecord['output'];
+
+        // Do we have RDF data?
+        if(rdf) {
+          setGeneratedOutput(rdf)
+
+          // Create url to store generated result on solid pod
+          const filenameResult = outputConfiguration.result;
+          if(filenameResult) {
+            const relativePathResult = [storageDirectory, outputConfiguration.result].join('/')
+            const urlRDFData = new URL(relativePathResult, podUrl).toString()
+
+            await storeOnSolidPod(urlRDFData,
+                rdf,
+                ()=>setAlert(makeAlert('info', 'Successfully stored generated result on Solid pod!!')),
+                (err)=>setAlert(makeWarningAlert('Error while storing result on Solid Pod'))
+            )
+          }else {
+            setAlert(makeWarningAlert('No filepath specified for storing the generated RDF data on the Solid pod'))
+          }
+
+        }
+        else alertMessages.push('Generated RDF data is empty')
+
+        // Do we have prov data?
+        if(prov) {
+          setProvenance(prov)
+          // Create url to store corresponding provenance data on solid pod
+          const filenameProvenanceResult = outputConfiguration.provenanceResult
+          if(filenameProvenanceResult) {
+            const relativePathProv = [storageDirectory, filenameProvenanceResult].join('/')
+            const urlProv = new URL(relativePathProv, podUrl).toString()
+
+            await storeOnSolidPod(urlProv,
+                prov,
+                ()=>setAlert(makeAlert('info', 'Successfully stored provenance data on Solid Pod')),
+                (err)=>setAlert(makeWarningAlert('Error while storing provenance data on Solid Pod'))
+            );
+          }else {
+            setAlert(makeWarningAlert('No filepath specified for storing the provenance data on the Solid pod'))
+          }
+        }
+        else alertMessages.push('Provenance data is empty')
+      }
+      // Do we need to notify the user about something that happened during the execution?
+      if(alertMessages.length === 0) {
+        setExecutionStatus(EXECUTION_STATES.DONE);
+      }
+      else {
+        setAlert(makeAlert('warning', alertMessages.join('\n')))
+      }
+    }
+
+    const executeQueryStep = async()=> {
+      console.log('@executeQueryStep')
+      const configurationRecords = storage.configurationRecords.get();
+      const currentPipelineId = storage.pipelineId.get();
+      const currentPipelineStep = storage.pipelineStep.get();
+
+      const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
+
+      // Get solid configuration
+      const solidConfiguration = await getConfigurationRecordById(configurationRecords, 'solid-config');
+      const storageDirectory = solidConfiguration['storageDirectory'];
+      const solidSession = await getSolidSession();
       const podUrl = new URL(solidSession.webId).origin
 
       // Fetch query
-      const response = await fetch(queryRecord['file'])
+      const response = await fetch(referentRecord['file'])
       const query = await readAndDecodeBody(response)
-
 
       // Store result on Solid Pod
       // Create URLs for generated result & corresponding provenance data
-      const outputConfiguration = currentStepRecord['output'];
+      const outputConfiguration = stepRecord['output'];
       const relativePathResult = [storageDirectory, outputConfiguration['result']].join('/')
       const urlResult = new URL(relativePathResult, podUrl).toString()
 
@@ -480,133 +559,20 @@ function App() {
       const onMetadataAvailable = async (metadata) => {
         const strQueryProvenance = JSON.stringify(metadata, null, 2)
         setQueryProvenance(strQueryProvenance)
-        // TODO: Store provenance on the Solid Pod
+        // TODO: Store query provenance on the Solid Pod
       }
-
-
 
       const onError = (err) => {
         // storage.executionState.set(EXECUTION_STATES.FAILED)
-        setAlert(makeWarningAlert(`Error while executing query (query id: ${queryRecord['id']})\nError: ${err}`))
+        setAlert(makeWarningAlert(`Error while executing query (query id: ${referentRecord['id']})\nError: ${err}`))
       }
 
+      // Determine input sources to query
+      const input = stepRecord['input'];
 
-      // Run query
       const sources = input.map(inputFilename => urlJoin(podUrl, storageDirectory, inputFilename))
+      // Run query
       await executeQuery(engine, query, sources, onResult,onMetadataAvailable,onError)
-    }
-
-    try {
-      switch (referentRecord['type']) {
-        case 'mapping':
-          await executeMappingStep(referentRecord)
-          break;
-        case 'query':
-          const {input, output} = currentStepRecord;
-          await executeQueryStep(referentRecord, input, output)
-          break;
-        default:
-          setAlert(makeWarningAlert('Unknown type of pipeline step record'))
-      }
-    }catch (err) {
-      // storage.executionState.set(EXECUTION_STATES.FAILED)
-      setAlert(makeWarningAlert('Error while executing...'))
-    }
-
-  }
-
-  ///////////////////////////////////////////////////////////////////////////
-  // ************ EXECUTION TRACKING STUFF *******************
-
-  //////////////////
-  // State variables
-
-  // Execution status
-  const [executionStatus, _setExecutionStatus] = useState(storage.executionStatus.get());
-  const setExecutionStatus = (status) => {
-    storage.executionStatus.set(status);
-    _setExecutionStatus(status);
-  }
-
-  // Execution iteration: contains the index and number of retries
-  const [preconditionCheckIterations, _setPreconditionCheckIterations] = useState(storage.preconditionCheckIteration.get())
-  const setExecutionIteration = (it) => {
-    storage.preconditionCheckIteration.set(it);
-    _setPreconditionCheckIterations(it)
-  }
-
-  // Iteration Items (functions)
-  const [iterationPreconditionFunctions, setIterationItems] = useState();
-
-
-  const createExecutionPreconditionIterationsForMappingExecution = (referentRecord)  => {
-
-    // Solid
-    const checkSolidConnection = async () => {
-      console.log('@iterationPreconditionFunction: solid');
-      const isSolidConnected = await getSolidSession();
-
-      return !!isSolidConnected
-    }
-    const establishSolidConnection = async ()=> {
-      await getOrEstablishSolidSession();
-    }
-
-    // Provider
-    const {provider, file} = referentRecord;
-    const checkProviderConnection = async () => {
-      console.log('@iterationPreconditionFunction: provider');
-      const providerConnected = await isProviderConnected(provider);
-      return providerConnected
-    }
-    const establishProviderConnection = async () => {
-      await handleProviderConnection(provider)
-    }
-
-    return [
-      {
-        checkPrecondition: checkSolidConnection,
-        establishPrecondition: establishSolidConnection
-      },
-      {
-        checkPrecondition: checkProviderConnection,
-        establishPrecondition: establishProviderConnection
-      }
-    ]
-  }
-
-  // Execution Status side-effect
-  useEffect(() => {
-    function preconditionChecks() {
-      const configurationRecords = storage.configurationRecords.get();
-      if(configurationRecords) {
-        const currentPipelineId = storage.pipelineId.get();
-        const currentPipelineStep = storage.pipelineStep.get();
-        const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
-        console.log('step record: ', stepRecord)
-        console.log('referent record: ', referentRecord)
-
-        switch (referentRecord['type']) {
-          case 'mapping':
-            if(!iterationPreconditionFunctions) {
-              console.log('iterationItems undefined, ... initializing now');
-              const items = createExecutionPreconditionIterationsForMappingExecution(referentRecord);
-              setIterationItems(items);
-            }
-
-            setExecutionIteration({index:0, retries: 0})
-            break;
-          case 'query':
-            // TODO:
-            throw Error('NOT IMPLEMENTED YET: precondition checks for query step');
-
-          default:
-            throw Error('Unknown step record type: ' , referentRecord['type'])
-        }
-
-      }else {
-        console.error('THE CONFIGURATION RECORDS IN STORAGE ARE NULL/UNDEFINED!??')
-      }
     }
 
     async function executeStep() {
@@ -614,97 +580,19 @@ function App() {
       if(configurationRecords) {
         const currentPipelineId = storage.pipelineId.get();
         const currentPipelineStep = storage.pipelineStep.get();
-        const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
 
-        // Get solid configuration
-        const solidConfiguration = await getConfigurationRecordById(configurationRecords, 'solid-config');
-        const storageDirectory = solidConfiguration['storageDirectory'];
-
-        console.log('step record: ', stepRecord)
-        console.log('referent record: ', referentRecord)
+        // Decide what type of step to execute
+        const {referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
 
         switch (referentRecord['type']) {
+
           case 'mapping':
-            console.log('going to execute mapping step');
-            const {provider, file} = referentRecord;
-            console.log('provider: ' , provider)
-            // Execute the mapping
-            const params = {provider, file}
-            const response =  await fetch('/rmlmapper', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(params)
-            })
-
-            // Parse & process result
-            const parsedResponse = await tryParseJsonResponse(response)
-
-            let alertMessages = []
-
-            if(parsedResponse.success) {
-              const {rdf, prov} = parsedResponse.body
-
-              // Create URLs to generated result and corresponding provenance
-              const outputConfiguration = stepRecord['output'];
-              const solidSession = await getSolidSession();
-              const podUrl = new URL(solidSession.webId).origin
-
-              // Do we have RDF data?
-              if(rdf) {
-                setGeneratedOutput(rdf)
-
-                // Create url to store generated result on solid pod
-                const filenameResult = outputConfiguration.result;
-                if(filenameResult) {
-                  const relativePathResult = [storageDirectory, outputConfiguration.result].join('/')
-                  const urlRDFData = new URL(relativePathResult, podUrl).toString()
-
-                  await storeOnSolidPod(urlRDFData,
-                      rdf,
-                      ()=>setAlert(makeAlert('info', 'Successfully stored generated result on Solid pod!!')),
-                      (err)=>setAlert(makeWarningAlert('Error while storing result on Solid Pod'))
-                  )
-                }else {
-                  setAlert(makeWarningAlert('No filepath specified for storing the generated RDF data on the Solid pod'))
-                }
-
-              }
-              else alertMessages.push('Generated RDF data is empty')
-
-              // Do we have prov data?
-              if(prov) {
-                setProvenance(prov)
-                // Create url to store corresponding provenance data on solid pod
-                const filenameProvenanceResult = outputConfiguration.provenanceResult
-                if(filenameProvenanceResult) {
-                  const relativePathProv = [storageDirectory, filenameProvenanceResult].join('/')
-                  const urlProv = new URL(relativePathProv, podUrl).toString()
-
-                  await storeOnSolidPod(urlProv,
-                      prov,
-                      ()=>setAlert(makeAlert('info', 'Successfully stored provenance data on Solid Pod')),
-                      (err)=>setAlert(makeWarningAlert('Error while storing provenance data on Solid Pod'))
-                  );
-                }else {
-                  setAlert(makeWarningAlert('No filepath specified for storing the provenance data on the Solid pod'))
-                }
-              }
-              else alertMessages.push('Provenance data is empty')
-            }
-            // Do we need to notify the user about something that happened during the execution?
-            if(alertMessages.length === 0) {
-              setExecutionStatus(EXECUTION_STATES.DONE);
-            }
-            else {
-              setAlert(makeAlert('warning', alertMessages.join('\n')))
-            }
-
+            await executeMappingStep();
             break;
+
           case 'query':
-            // TODO:
-            throw Error('NOT IMPLEMENTED YET: execution  for query step');
+            await executeQueryStep()
+            break;
 
           default:
             throw Error('Unknown step record type: ' , referentRecord['type'])
@@ -771,11 +659,11 @@ function App() {
 
             if(preconditionOk) {
               // Precondition met, we can go to the next execution iteration
-              setExecutionIteration({index: index+1,  retries:0})
+              setPreconditionCheckIterations({index: index+1,  retries:0})
             }else {
               // Precondition not met
               await establishPrecondition();
-              setExecutionIteration({index,  retries:retries+1})
+              setPreconditionCheckIterations({index,  retries:retries+1})
             }
           } catch (err) {
             console.log('Error during precondition check... Error: ', err)
