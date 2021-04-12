@@ -123,13 +123,13 @@ describe('Transfer Component API calls', {retries: 3}, () => {
         // Returns that the stub-provider is connected
         cy.intercept('/status/*/connected', statusProviderIsConnected).as('returnStatusProviderConnected')
         // Replaces any POST calls to /rmlmappper with the example output response (see /fixtures)
-        cy.intercept('POST', '/rmlmapper', { fixture: 'example-output.json' }).as('postCallToRMLMapper')
+        cy.intercept('POST', '**/rmlmapper', { fixture: 'example-output.json' }).as('postCallToRMLMapper')
 
         // Select option 1(option 0 is NOT an RML Mapping)
         cy.get('@optionRecords').then(optionRecords => cy.get('[data-test=mapping-selector]').select(optionRecords[1].value)).log('Selected option')
 
         // Click execute
-        cy.get('[data-test=execute-mapping]').click().log('Clicked execute').wait('@postCallToRMLMapper')
+        cy.get('[data-test=execute-mapping]').click().log('Clicked execute').wait('@postCallToRMLMapper',{timeout: 3000})
     })
 
 
