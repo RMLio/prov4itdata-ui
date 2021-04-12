@@ -607,7 +607,11 @@ function App() {
 
     async function trackPreconditionCheckIterations() {
       const {index,retries} = preconditionCheckIterations;
-      const MAX_RETRIES = 10; // TODO: fetch from configuration records
+      const configurationRecords = storage.configurationRecords.get()
+
+      // Get the maximumAuthorizationAttempts from configuration. If not present, use default (10)
+      const {maximumAuthorizationAttempts} = filterRecordsByType(configurationRecords,'authorizationFlowConfiguration')
+      const MAX_RETRIES = maximumAuthorizationAttempts ? parseInt(maximumAuthorizationAttempts) : 10;
 
       if(index < iterationPreconditionFunctions.length) {
         if(retries < MAX_RETRIES) {
