@@ -1,4 +1,4 @@
-
+// The following code is borrowed from: https://github.com/solid/solid-auth-client/tree/main/src/__test__
 export const sessionKeys = {
     public: {
         kty: 'RSA',
