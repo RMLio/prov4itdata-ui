@@ -1,4 +1,7 @@
 import auth from "solid-auth-client";
+import SolidFileClient from "solid-file-client";
+
+import {tryParseJsonResponse} from "./helpers";
 
 export const getSolidSession = async () => {
     const session = await auth.currentSession();
@@ -42,6 +45,26 @@ export const storeOnSolidPod = async (url, data, onSuccess=f=>f,onError=f=>f) =>
         if(response.status === 200)
             onSuccess(response)
     }catch (err) {
+        onError(err)
+    }
+}
+
+/**
+ * Stores the provided content as a file on the Solid Pod.
+ * @param url
+ * @param content
+ * @param contentType
+ * @param onSuccess
+ * @param onError
+ * @returns {Promise<void>}
+ */
+export const storeFileOnSolidPod = async (url, content, contentType, onSuccess=f=>f, onError=f=>f) => {
+    const fc = new SolidFileClient(auth);
+    try {
+        const response = await fc.postFile(url, content, contentType);
+        onSuccess()
+    }
+    catch (err) {
         onError(err)
     }
 }

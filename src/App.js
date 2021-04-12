@@ -35,7 +35,7 @@ import {
   getOrEstablishSolidSession,
   getSolidSession,
   handleSolidLogout,
-  removeFromSolidPod,
+  removeFromSolidPod, storeFileOnSolidPod,
   storeOnSolidPod
 } from "./lib/solid-helpers";
 import {executeQuery} from "./lib/query-helpers";
@@ -188,6 +188,11 @@ function App() {
         <Button data-test="button-logout"
             onClick={
               async ()=>{
+
+                // Logout: Solid
+                await handleSolidLogout()
+
+                // Logout: backend
                 await handleLogout(
                   () => {
                     // Clear local storage
@@ -197,7 +202,9 @@ function App() {
                     // Notify user about successful log out
                     setAlert(makeAlert('info', 'Successfully logged out'))
                   },
-                  () => setAlert(makeWarningAlert('Error when logging out')))}
+                  () => setAlert(makeWarningAlert('Error when logging out')))
+
+              }
             }>
           Log out
         </Button>
@@ -504,11 +511,12 @@ function App() {
       const outputConfiguration = stepRecord['output'];
       const relativePathResult = [storageDirectory, outputConfiguration['result']].join('/')
       const urlResult = new URL(relativePathResult, podUrl).toString()
-
+      const relativePathProv = [storageDirectory, outputConfiguration['provenanceResult']].join('/')
+      const urlProv = new URL(relativePathProv, podUrl).toString()
       // Callback for the query result returned by the engine
       const onResult = async (result) => {
         setQueryResult(result)
-
+        setExecutionStatus(EXECUTION_STATES.DONE)
         // Store result on the Solid Pod
         await storeOnSolidPod(urlResult,
             result,
@@ -520,11 +528,22 @@ function App() {
       const onMetadataAvailable = async (metadata) => {
         const strQueryProvenance = JSON.stringify(metadata, null, 2)
         setQueryProvenance(strQueryProvenance)
-        // TODO: Store query provenance on the Solid Pod
+
+        const params = {
+          url: urlProv,
+          content: strQueryProvenance,
+          contentType: 'application/json',
+          onSuccess: () =>
+              setAlert(makeAlert('info', 'Successfully stored query provenance on Solid pod')),
+          onError: (err) =>
+              setAlert(makeWarningAlert(`Error while storing query provenance on Solid pod.
+              Message: ${err.toString()}`))
+        }
+        await storeFileOnSolidPod(params)
       }
 
       const onError = (err) => {
-        // storage.executionState.set(EXECUTION_STATES.FAILED)
+        setExecutionStatus(EXECUTION_STATES.FAILED)
         setAlert(makeWarningAlert(`Error while executing query (query id: ${referentRecord['id']})\nError: ${err}`))
       }
 
@@ -552,6 +571,7 @@ function App() {
             break;
 
           case 'query':
+
             await executeQueryStep()
             break;
 
@@ -577,7 +597,17 @@ function App() {
       case EXECUTION_STATES.INIT_EXECUTION:
         console.log('useEffect: executionStatus changed and it changed to INIT_EXECUTION');
         // This state occurs when the execution of a pipeline step is initialized.
-        executeStep();
+        // Note: using Promise chainables because function App must be sync
+        executeStep()
+            .then(()=>{
+              setExecutionStatus(EXECUTION_STATES.DONE);
+              setAlert(makeAlert('info',
+                  `Successfully executed step: ${storage.pipelineStep.get()}`));
+            })
+            .catch(err=>{
+              setExecutionStatus(EXECUTION_STATES.FAILED);
+              setAlert(makeWarningAlert());
+            })
         break;
       case EXECUTION_STATES.EXECUTING:
         console.log('useEffect: executionStatus changed and it changed to EXECUTING');
