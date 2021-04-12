@@ -9,10 +9,10 @@ import React from "react";
  * @returns {JSX.Element}
  * @constructor
  */
-export default function CollapsibleCard({header, headerId, children}) {
+export default function CollapsibleCard({id, header, headerId, children}) {
     const eventKey = 'ek-'+headerId
 
-    return (<Card>
+    return (<Card data-test={id}>
         <Card.Header>
             <Accordion.Toggle as={Button} variant="link" eventKey={eventKey} data-test={headerId}>
                 {header}

@@ -2,24 +2,25 @@ import './App.css';
 import React, {useEffect, useState} from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css'
 import Transfer from "./components/transfer";
-import {Alert, Button, Card} from 'react-bootstrap';
+import {Alert, Button} from 'react-bootstrap';
 import {
-  handleProviderConnection,
-  handleSolidLogin,
-  handleSolidOperation,
-  makeWarningAlert,
-  readAndDecodeBody,
   createOptionRecordsFromMetaData,
   executeMappingOnBackend,
-  makeAlert,
-  STORAGE_KEYS,
+  extractProviderFromMappingUrl,
+  getConnectionUrlForProvider, getQueryRecords, getTransferConfiguration,
+  handleLogout,
+  handleSolidLogin,
+  handleSolidLogout,
+  handleSolidOperation,
   isProviderConnected,
-  getConnectionUrlForProvider, extractProviderFromMappingUrl, handleSolidLogout, handleLogout
+  makeAlert,
+  makeWarningAlert,
+  readAndDecodeBody, runQuery,
+  STORAGE_KEYS,  storeRDFDataOnSolidPod
 } from "./lib/helpers";
 import CollapsibleCard from "./components/collapsible-card";
-
-
-
+import {newEngine} from "@prov4itdata/actor-init-sparql";
+import SyntaxHighlighter from "react-syntax-highlighter";
 
 function App() {
 
@@ -342,6 +343,66 @@ function App() {
         </Button>
       </CollapsibleCard>)
 
+
+
+
+  // QUERY STUFF
+  const engine = newEngine();
+  const [queryResult, setQueryResult] = useState('')
+  const [queryRecords, setQueryRecords] = useState({})
+  const [queryProvenance, setQueryProvenance] = useState('')
+
+  // Get queries from backend using side-effects.
+  // This side-effect will be executed only once.
+  useEffect(()=>{
+    getQueryRecords().then(setQueryRecords);
+  },[])
+
+  const createQueryButton = (qId, qRecord) => ( <Button
+      data-test={`query-button-${qId}`}
+      onClick={
+        async ()=>{
+
+          const onResult = async (result) => {
+            setQueryResult(result)
+
+            // Store result on Solid Pod
+            const transferConfiguration = await getTransferConfiguration();
+            const transferStorageDirectory = transferConfiguration['solid']['storageDirectory'];
+            const transferFilename = transferConfiguration['solid']['transferFilename'];
+            const relativePath = [transferStorageDirectory, transferFilename].join('/')
+
+            await storeRDFDataOnSolidPod(result, relativePath, (success)=>{},(error)=>{
+              setAlert(makeWarningAlert(error.toString()))
+            })
+          }
+
+          const onMetadataAvailable = (metadata) =>
+            setQueryProvenance(JSON.stringify(metadata, null, 2))
+
+
+          const onError = (err) =>
+              setAlert(makeWarningAlert(`Error while executing query (query id: ${qId})\nError: ${err}`))
+
+          // Run query
+          await runQuery(engine, qRecord.query, onResult,onMetadataAvailable, onError)
+        }
+      }>
+    {qRecord.description}
+  </Button>) ;
+
+  const queryCard = ( <CollapsibleCard id="card-query" header="Query" headerId="card-header-query">
+    <>
+      {(queryRecords)?Object.entries(queryRecords).map(entry=> createQueryButton(...entry)) : null }
+      <SyntaxHighlighter data-test="query-result">{queryResult}</SyntaxHighlighter>
+      Query provenance
+      <SyntaxHighlighter data-test="query-provenance">{queryProvenance}</SyntaxHighlighter>
+
+    </>
+
+  </CollapsibleCard>)
+
+
   return (
     <div className="App container">
       <h1>PROV4ITDaTa-DAPSI</h1>
@@ -362,6 +423,8 @@ function App() {
           data-cy="transfercomp"
       >
         {settingsCard}
+        {queryCard}
+
       </Transfer>
     </div>
   );

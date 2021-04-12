@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Integrated Cypress tests (see [MR](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/merge_requests/2))
 - GitLab CI (see [MR](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/merge_requests/5))
 - Logout component (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/19))
-
+- Integrate custom Comunica engine for querying Solid POD (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/23))
+ 
 ### Changed
 
 - Removed public/rml folder (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/6))

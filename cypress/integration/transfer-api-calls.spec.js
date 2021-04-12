@@ -21,7 +21,7 @@ const statusProviderIsNotConnected = {
 /**
  * Test whether the correct API calls are made when interacting with the Transfer Component
  */
-describe('Transfer Component API calls', () => {
+describe('Transfer Component API calls', {retries: 3}, () => {
 
 
     beforeEach(() => {
@@ -38,8 +38,6 @@ describe('Transfer Component API calls', () => {
 
     it('Should GET the content of a selected RML Mapping', () => {
 
-        // Intercept calls for getting the content of an RML Mapping
-        cy.intercept('/rml/*/*.ttl').as('getContentsOfRMLMapping')
         // Select option 1 (option 0 is NOT an RML Mapping)
         cy.get('@optionRecords')
             .then(optionRecords => cy.get('[data-test=mapping-selector]').select(optionRecords[1].value))
@@ -135,5 +133,5 @@ describe('Transfer Component API calls', () => {
             .click()
             .wait('@postCallLogout')
     })
-    
+
 })

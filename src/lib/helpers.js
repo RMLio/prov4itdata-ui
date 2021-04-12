@@ -3,7 +3,8 @@ import auth from "solid-auth-client";
 export const STORAGE_KEYS = {
     MAPPING_CONTENT: 'MAPPING_CONTENT',
     MAPPING_URL: 'MAPPING_URL',
-    EXECUTION_ATTEMPTS: 'EXECUTE_ATTEMPTS'
+    EXECUTION_ATTEMPTS: 'EXECUTE_ATTEMPTS',
+    QUERY_RESULT: 'QUERY_RESULT'
 }
 
 export const MIME_TYPES = {
@@ -205,12 +206,11 @@ export async function getConnectionUrlForProvider(provider) {
 }
 
 /**
- * Gets Solid Configuration for the given provider from the backend.
- * @param provider
- * @returns {Promise<null|any>}
+ *
+ * @param url
+ * @returns {Promise<null>}
  */
-export async function getSolidConfiguration(provider) {
-    const url = `/configuration/${provider}/solid`
+export async function fetchAndParseBodyToJson(url) {
     const response = await fetch(url, {
         headers: {
             'Content-Type': 'application/json'
@@ -218,13 +218,22 @@ export async function getSolidConfiguration(provider) {
     })
 
     const parsedResponse = await tryParseJsonResponse(response)
-    let solidConfiguration = null
+    let jsonResponse = null
     if(parsedResponse.success)
-        solidConfiguration = parsedResponse.body
+        jsonResponse = parsedResponse.body
     else {
-        console.error('Erorr while parsing Solid Configuration. Reason: ', parsedResponse.reason)
+        console.error('Error while parsing JSON Response. Reason: ', parsedResponse.reason)
     }
-    return solidConfiguration
+    return jsonResponse
+}
+/**
+ * Gets Solid Configuration for the given provider from the backend.
+ * @param provider
+ * @returns {Promise<null|any>}
+ */
+export async function getSolidConfiguration(provider) {
+    const url = `/configuration/${provider}/solid`
+    return await fetchAndParseBodyToJson(url);
 }
 
 
@@ -266,3 +275,131 @@ export const handleLogout = async (processBody, onError) => {
     if (!parsedResponse.success)
         onError(parsedResponse.reason)
 }
+
+export const handleQuery = async (engine, query, sources) => {
+
+    const s = await auth.currentSession();
+
+    if(s) {
+
+        const params = {
+            sources
+        }
+        console.log('params: ', params)
+
+        // Execute query & return promise to query result
+        return await engine.query(query, params)
+
+
+
+    }else {
+        console.log('NOT LOGGED IN TO SOLID... CANT QUERY !')
+        await handleSolidLogin()
+    }
+
+}
+
+/**
+ * Query Solid pod for intermediate datasets
+ *
+ * @param s: Solid Session
+ * @param engine: Comunica Query Engine
+ * @returns {Promise<[]>}
+ */
+const getRelativePathsOfIntermediateDatasets = async () => {
+    console.log('@getRelativePathsOfIntermediateDatasets')
+    const transferConfiguration = await getTransferConfiguration();
+    if(!transferConfiguration)
+        throw Error('Transfer configuration is undefined');
+    // Map every provider in the transfer configuration to the relative path of its dataset file
+    let relativeFilePaths = Object.keys(transferConfiguration).filter(k => k!= 'solid')
+        .map(provider => transferConfiguration[provider]['solid']['filename'])
+        .map(filename => `${transferConfiguration['solid']['storageDirectory']}/${filename}`);
+    return relativeFilePaths
+}
+
+/**
+ * Runs query on intermediate datasets on the Solid pod
+ * @param engine
+ * @param query
+ * @param onResult: callback to be executed on the stringified result
+ * @returns {Promise<void>}
+ */
+export const runQuery = async (engine, query, onResult, onMetadataAvailable, onError)=>{
+    try {
+        const solidSession = await auth.currentSession()
+        if(!solidSession){
+            onError('Not logged in to Solid');
+            await handleSolidLogin()
+        }
+        else {
+            // Get the relative paths from transfer configuration
+            const relativePaths =   await getRelativePathsOfIntermediateDatasets()
+            // Resolve relative paths relative to the origin of the current Solid Pod
+            const originSolidPod = new URL(solidSession.webId).origin;
+            const sources = relativePaths.map(rp => new URL(rp, originSolidPod)).map(url=>url.toString())
+            // Execute Query
+            const queryResult = await handleQuery(engine, query, sources)
+
+            // Process result
+            if(queryResult) {
+
+                // Process metadata, if any
+                if(queryResult.metadata) {
+                    const metadata = await queryResult.metadata();
+                    onMetadataAvailable(metadata)
+                }
+
+                // Process the actual query result data
+                const resultStream = await engine.resultToString(queryResult)
+                resultStream.data.setEncoding('utf-8')
+
+                // Collect chunks of data
+                let chunks = []
+                resultStream.data.on('data', (chunk)=> {
+                    chunks.push(chunk)
+                })
+                // When all chunks are collected, invoke callback with stringified result
+                resultStream.data.on('end', ()=>{
+                    const strResult = chunks.join('')
+                    onResult(strResult)
+                })
+            }
+        }
+    }catch (err) {
+        onError(err)
+    }
+}
+export const storeRDFDataOnSolidPod = async (data, relativeFilepath, onSuccess = f=>f, onError = f=>f) => {
+    try {
+        const solidSession = await auth.currentSession()
+        if(solidSession){
+            const podUrl = new URL(solidSession.webId).origin
+            const url = new URL(relativeFilepath, podUrl).toString();
+
+            const params = {
+                method : 'PATCH',
+                body : `INSERT DATA {${data}}`,
+                headers : {
+                    'Content-Type': 'application/sparql-update'
+                }
+            }
+
+            const response = await auth.fetch(url, params)
+            if (response.status === 200)
+                onSuccess(response)
+            else {
+                const errMessage = `Unable to store data on Solid Pod! (${response.status}): ${response.statusText}`;
+                throw Error(errMessage);
+            }
+        }else {
+            throw Error('Not Logged on to Solid');
+        }
+    }catch (err) {
+        onError(err)
+    }
+
+
+}
+export const getQueryRecords = async  () => fetchAndParseBodyToJson('/configuration/queries.json');
+export const getTransferConfiguration = async () => fetchAndParseBodyToJson('/configuration/transfer-configuration.json');

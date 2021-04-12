@@ -3,13 +3,13 @@
 import { createOptionRecordsFromMetaData } from './helpers'
 
 
-describe('Transfer Component', () => {
+describe('Transfer Component', {retries:3}, () => {
 
 
     /**
-     * Tests for the minimal required elements of 
+     * Tests for the minimal required elements of
      * the collapsable cards
-     * @param {*} selector 
+     * @param {*} selector
      */
     function testMinimalCollapseCardStructure(selector) {
         cy.get(selector).find('.card-header')
@@ -19,7 +19,7 @@ describe('Transfer Component', () => {
 
     /**
      * Tests for the minimal collapsable card structure that contains a download element
-     * @param {*} selector 
+     * @param {*} selector
      */
     function testDownloadCollapseCard(selector) {
         testMinimalCollapseCardStructure(selector)
@@ -36,6 +36,8 @@ describe('Transfer Component', () => {
 
         cy.intercept('GET', '/rml/mappings-metadata.json', {fixture : 'mappings-metadata.json'})
 
+        cy.intercept('GET', '/configuration/queries.json', {fixture: 'queries.json'}).as('queries');
+
         cy.visit('/')
 
         cy
@@ -50,6 +52,7 @@ describe('Transfer Component', () => {
             path: '/rml/*/*'
 
         }, { 'fixture': 'example-mapping.ttl' })
+
 
     })
 
@@ -109,7 +112,7 @@ describe('Transfer Component', () => {
 
         // Execute RML Mapping
         cy.get('[data-test=execute-mapping]').click()
-       
+
         // Expand card: generated rdf
         cy.get('[data-test=card-generated-rdf] > .collapse > .card-body > pre').should('not.be.visible')
         cy.get('[data-test=card-generated-rdf] > .card-header > .btn').click()
@@ -122,5 +125,25 @@ describe('Transfer Component', () => {
 
     })
 
+    it('Correctly renders the Query card',()=>{
+        // Test whether the query card exists
+        cy.get('[data-test=card-query]').log('Query card exists');
+
+        // Find query card header & expand the query card
+        cy.get('[data-test=card-header-query]')
+            .click()
+
+        cy.fixture('queries').then((queries)=>{
+            const nQueries = Object.keys(queries).length;
+
+            // Test whether a button is rendered for every query
+            cy.get('[data-test=card-query] > .collapse > .card-body > .btn')
+                .should('have.length',nQueries)
+                .log('The number of query buttons is correct')
+        })
+
+        // Test whether the syntax component for the query result exists
+        cy.get('[data-test=query-result]').log('Query result syntax component exists')
+    })
 
 })
