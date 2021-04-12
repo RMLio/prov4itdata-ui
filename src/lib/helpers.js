@@ -156,6 +156,15 @@ export async function fetchAndParseBodyToJson(url) {
     }
     return jsonResponse
 }
+/**
+ * Gets Solid Configuration for the given provider from the backend.
+ * @param provider
+ * @returns {Promise<null|any>}
+ */
+export async function getSolidConfiguration(provider) {
+    const url = `/configuration/${provider}/solid`
+    return await fetchAndParseBodyToJson(url);
+}
 
 export function makeAlert(variant, body) {
     return {variant, body}
