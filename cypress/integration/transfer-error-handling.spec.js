@@ -6,9 +6,6 @@ describe('Transfer Error Handling', () => {
             statusCode: 500
         }
 
-        // Intercepts calls for the RML Mapping data and mock an internal server error
-        cy.intercept('**/mappings-metadata.json', internalServerError);
-
         // Visit root
         cy.visit('/')
 

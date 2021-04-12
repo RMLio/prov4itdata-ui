@@ -86,16 +86,20 @@ function App() {
         optionRecords = createOptionRecordsFromConfigurationRecords(configurationRecords)
         console.log('option records: ', optionRecords)
       } catch (err) {
-        console.log('Error while processing configuration! Message: ' , err);
+        const errMsg = 'Error while processing configuration! Message: '  + err;
+        console.error(errMsg)
+        setAlert(makeWarningAlert(errMsg))
       } finally {
         console.log('updating option records : ' , optionRecords)
+        if(optionRecords.length === 0) {
+          console.log('option records zero')
+          setAlert(makeWarningAlert('Error: no options to select from.'))
+        }
         updateMappings(optionRecords)
+
       }
-
     }
-
     processConfiguration()
-
   },[])
 
 
@@ -178,47 +182,6 @@ function App() {
 
   const renderedAlert = alert ? <Alert variant={alert.variant} data-test="alert-box">{alert.body}</Alert> : null;
 
-  const useIterator = (items = [], initialIndex = 0) => {
-    const [i, setIndex] = useState(initialIndex);
-    const next = () => {
-      setIndex(i+1)
-    }
-
-    if(i < items.length)
-      return [items[i], next]
-
-    return [null, null]
-  }
-  //
-  // const trackExecution = async () => {
-  //   console.log('@trackSession')
-  //   storage.executionStatus.set(EXECUTION_STATES.BUSY)
-  //
-  //   const configurationRecords = storage.configurationRecords.get();
-  //   const currentPipelineId = storage.pipelineId.get();
-  //   const currentPipelineStep = storage.pipelineStep.get();
-  //
-  //   console.log('conf recs: ', configurationRecords);
-  //   console.log('current pipeline id', currentPipelineId);
-  //   console.log('current pipeline step: ', currentPipelineStep);
-  //
-  //   const {stepRecord, referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
-  //   console.log('step record: ', stepRecord)
-  //   console.log('referent record: ', referentRecord)
-  //
-  //
-  //   switch (referentRecord['type']) {
-  //     case 'mapping':
-  //
-  //       break;
-  //     case 'query':
-  //       // TODO:
-  //       break;
-  //     default:
-  //       throw Error('Unknown step record type: ' , referentRecord['type'])
-  //   }
-  // }
-
   // Settings card that will be added as a child to the Transfer component
   const settingsCard = (
       <CollapsibleCard header="Settings" headerId="card-header-settings">
@@ -245,19 +208,7 @@ function App() {
   const engine = newEngine();
   const [query, setQuery] = useState('')
   const [queryResult, setQueryResult] = useState('')
-  const [queryRecords, setQueryRecords] = useState({})
   const [queryProvenance, setQueryProvenance] = useState('')
-
-  // Get queries from backend using side-effects.
-  // This side-effect will be executed only once.
-  useEffect(()=>{
-    const parseQueryRecords = async () => {
-      const configurationRecords = await getConfigurationRecords()
-      const queryRecords = getQueryRecords(configurationRecords)
-      return queryRecords
-    }
-    parseQueryRecords().then(setQueryRecords)
-  },[])
 
   const queryCard = ( <CollapsibleCard id="card-query" header="Query" headerId="card-header-query">
     <>
@@ -269,10 +220,7 @@ function App() {
       <SyntaxHighlighter data-test="query-provenance">{queryProvenance}</SyntaxHighlighter>
 
     </>
-
   </CollapsibleCard>)
-
-  // PIPELINE STUFF
 
   /**
    * When triggered, the content of the pipeline's first mapping will be fetched and the state variable
@@ -335,7 +283,7 @@ function App() {
   }
 
   ///////////////////////////////////////////////////////////////////////////
-  // ************ EXECUTION TRACKING STUFF *******************
+  // ************ EXECUTION TRACKING  *******************
 
   //////////////////
   // State variables
@@ -361,75 +309,88 @@ function App() {
   useEffect(() => {
     function preconditionChecks() {
       const configurationRecords = storage.configurationRecords.get();
-      if(configurationRecords) {
-        const currentPipelineId = storage.pipelineId.get();
-        const currentPipelineStep = storage.pipelineStep.get();
-        const {referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
+      const currentPipelineId = storage.pipelineId.get();
+      const currentPipelineStep = storage.pipelineStep.get();
 
-        // Precondition check functions
-        // Solid
-        const checkSolidConnection = async () => {
-          console.log('@iterationPreconditionFunction: solid');
-          const isSolidConnected = await getSolidSession();
-
-          return !!isSolidConnected
-        }
-        const establishSolidConnection = async ()=> {
-          await getOrEstablishSolidSession();
-        }
-
-        // Provider
-        const {provider} = referentRecord;
-        const checkProviderConnection = async () => {
-          console.log('@iterationPreconditionFunction: provider');
-          const providerConnected = await isProviderConnected(provider);
-          return providerConnected
-        }
-        const establishProviderConnection = async () => {
-          await handleProviderConnection(provider)
-        }
-
-        switch (referentRecord['type']) {
-          case 'mapping':
-            if(!iterationPreconditionFunctions) {
-              console.log('iterationItems undefined, ... initializing now');
-              const items = [
-                {
-                  checkPrecondition: checkSolidConnection,
-                  establishPrecondition: establishSolidConnection
-                },
-                {
-                  checkPrecondition: checkProviderConnection,
-                  establishPrecondition: establishProviderConnection
-                }
-              ]
-              setIterationItems(items);
-            }
-
-            setPreconditionCheckIterations({index:0, retries: 0})
-            break;
-
-          case 'query':
-            if(!iterationPreconditionFunctions) {
-              console.log('iterationItems undefined, ... initializing now');
-              const items = [
-                {
-                  checkPrecondition: checkSolidConnection,
-                  establishPrecondition: establishSolidConnection
-                }
-              ]
-              setIterationItems(items);
-            }
-
-            setPreconditionCheckIterations({index:0, retries: 0})
-            break;
-          default:
-            throw Error('Unknown step record type: ' , referentRecord['type'])
-        }
-
-      }else {
-        console.error('THE CONFIGURATION RECORDS IN STORAGE ARE NULL/UNDEFINED!??')
+      if(!configurationRecords) {
+        console.error('Configuration records are undefined!')
+        return;
       }
+
+      if(!currentPipelineId) {
+        console.error('Current pipeline id is undefined!')
+        return;
+      }
+
+      if(!currentPipelineStep) {
+        console.error('Current pipeline step id is undefined!')
+        return;
+      }
+
+
+      const {referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
+
+      // Precondition check functions
+      // Solid
+      const checkSolidConnection = async () => {
+        console.log('@iterationPreconditionFunction: solid');
+        const isSolidConnected = await getSolidSession();
+
+        return !!isSolidConnected
+      }
+      const establishSolidConnection = async ()=> {
+        await getOrEstablishSolidSession();
+      }
+
+      // Provider
+      const {provider} = referentRecord;
+      const checkProviderConnection = async () => {
+        console.log('@iterationPreconditionFunction: provider');
+        const providerConnected = await isProviderConnected(provider);
+        return providerConnected
+      }
+      const establishProviderConnection = async () => {
+        await handleProviderConnection(provider)
+      }
+
+      switch (referentRecord['type']) {
+        case 'mapping':
+          if(!iterationPreconditionFunctions) {
+            console.log('iterationItems undefined, ... initializing now');
+            const items = [
+              {
+                checkPrecondition: checkSolidConnection,
+                establishPrecondition: establishSolidConnection
+              },
+              {
+                checkPrecondition: checkProviderConnection,
+                establishPrecondition: establishProviderConnection
+              }
+            ]
+            setIterationItems(items);
+          }
+
+          setPreconditionCheckIterations({index:0, retries: 0})
+          break;
+
+        case 'query':
+          if(!iterationPreconditionFunctions) {
+            console.log('iterationItems undefined, ... initializing now');
+            const items = [
+              {
+                checkPrecondition: checkSolidConnection,
+                establishPrecondition: establishSolidConnection
+              }
+            ]
+            setIterationItems(items);
+          }
+
+          setPreconditionCheckIterations({index:0, retries: 0})
+          break;
+        default:
+          throw Error('Unknown step record type: ' , referentRecord['type'])
+      }
+
     }
 
     const executeMappingStep = async () => {

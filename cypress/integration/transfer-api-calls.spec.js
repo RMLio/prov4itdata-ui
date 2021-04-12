@@ -1,6 +1,8 @@
 /// <reference types="Cypress" />
 
-import { createOptionRecordsFromConfigurationRecords} from "../../src/lib/configuration-helpers";
+import * as configHelpers from "../../src/lib/configuration-helpers";
+import {createOptionRecordsFromConfigurationRecords} from "../../src/lib/configuration-helpers";
+import {mockSolidSession} from "./helpers";
 
 // stub status status response body that indicates the provider is connected
 const statusProviderIsConnected = {
@@ -18,13 +20,15 @@ const statusProviderIsNotConnected = {
     }
 }
 
+
 /**
  * Test whether the correct API calls are made when interacting with the Transfer Component
  */
 describe('Transfer Component API calls', {retries: 3}, () => {
 
-
     beforeEach(() => {
+        localStorage.clear()
+        mockSolidSession()
 
         cy.intercept('GET', '/configuration/configuration.json', {fixture: 'configuration.json'})
         cy.intercept('GET', '/rml/*/*.ttl', {fixture : 'example-mapping.ttl'}).as('getContentsOfRMLMapping')
@@ -33,6 +37,15 @@ describe('Transfer Component API calls', {retries: 3}, () => {
         cy
             .fixture('configuration')
             .then((records)=>records['configurationRecords'])
+            .as('configurationRecords');
+
+        cy
+            .get('@configurationRecords')
+            .then(configRecords => configHelpers.filterRecordsByType(configRecords, 'pipeline'))
+            .as('pipelineRecords');
+
+        cy
+            .get('@configurationRecords')
             .then(createOptionRecordsFromConfigurationRecords, (error) => console.log("error while creating options from metadata"))
             .then(options => [{ value: 'default' }, ...options])
             .as('optionRecords')
@@ -56,8 +69,10 @@ describe('Transfer Component API calls', {retries: 3}, () => {
 
 
         // Click execute
-        cy.get('[data-test=execute-mapping]').click().log('Clicked execute')
+        cy.get('[data-test=execute-mapping]')
+            .click().log('Clicked execute')
     })
+
 
 
     it('Should make a GET request to check whether the provider is connected when clicking Execute', () => {
@@ -65,8 +80,15 @@ describe('Transfer Component API calls', {retries: 3}, () => {
         // Returns that the stub-provider is connected
         cy.intercept('/status/*/connected', statusProviderIsConnected).as('returnStatusProviderConnected')
 
-        // Select option 1(option 0 is NOT an RML Mapping)
-        cy.get('@optionRecords').then(optionRecords => cy.get('[data-test=mapping-selector]').select(optionRecords[1].value)).log('Selected option')
+        // Select a pipeline that will execute a mapping as its first step.
+        // Executing a mapping requires the check whether the corresponding provider is connected.
+        cy
+            .get('@pipelineRecords')
+            .then(pipelineRecords => {
+                const pipelineRecordsWithMappingAsFirstStep = pipelineRecords.filter(pr => pr.steps[0].type === 'mappingConfiguration')
+                const pipelineIdToSelect = pipelineRecordsWithMappingAsFirstStep[0].id
+                cy.get('[data-test=mapping-selector]').select(pipelineIdToSelect)
+            })
 
         // Click execute
         cy.get('[data-test=execute-mapping]').click().log('Clicked execute').wait('@returnStatusProviderConnected')
@@ -96,16 +118,12 @@ describe('Transfer Component API calls', {retries: 3}, () => {
 
     })
 
-    /**
-     * Note: the POST request will only be made when the user has logged onto the Solid Pod.
-     * Therefore, this test will be skipped until we can mock the Solid behavior.
-     */
-    it.skip('Should make a POST request when executing an RML Mapping when the provider is connected', () => {
+    it('Should make a POST request when executing an RML Mapping when the provider is connected', () => {
 
         // Returns that the stub-provider is connected
         cy.intercept('/status/*/connected', statusProviderIsConnected).as('returnStatusProviderConnected')
         // Replaces any POST calls to /rmlmappper with the example output response (see /fixtures)
-        cy.intercept('POST', '/rmlmapper/**', { fixture: 'example-output.json' }).as('postCallToRMLMapper')
+        cy.intercept('POST', '/rmlmapper', { fixture: 'example-output.json' }).as('postCallToRMLMapper')
 
         // Select option 1(option 0 is NOT an RML Mapping)
         cy.get('@optionRecords').then(optionRecords => cy.get('[data-test=mapping-selector]').select(optionRecords[1].value)).log('Selected option')
@@ -114,10 +132,6 @@ describe('Transfer Component API calls', {retries: 3}, () => {
         cy.get('[data-test=execute-mapping]').click().log('Clicked execute').wait('@postCallToRMLMapper')
     })
 
-    it.skip('Should GET the Solid configuration when Solid Fetch is clicked', () => {
-      // TODO: assert that a GET call to /configuration/<provider>/solid is made
-
-    })
 
     it('Clicking Disconnect Providers should make the appropriate POST call', () => {
 

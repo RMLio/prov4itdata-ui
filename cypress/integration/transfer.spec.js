@@ -26,25 +26,22 @@ describe('Transfer Component', {retries:3}, () => {
         cy.get(selector).contains('a', 'Download')
     }
 
-
     function selectOption(selectId, nthOption) {
         cy.get(selectId).then((options)=>{
             cy.get(selectId).select(options.children('option').eq(nthOption).val())
         })
     }
+
     beforeEach(() => {
 
         cy.intercept('GET', '/configuration/configuration.json', {fixture: 'configuration.json'})
-        //
-        // cy
-        //     .intercept('GET', '/configuration/queries.json', {fixture: 'queries.json'})
-        //     .as('queries');
 
         cy
             .fixture('configuration')
             .then((config)=>config['configurationRecords'])
-            .then((records)=>filterRecordsByType(records, 'query'))
-            .as('queries')
+            .then((records)=>filterRecordsByType(records, 'pipeline'))
+            .as('pipelines')
+
         cy.visit('/')
 
         cy
@@ -133,22 +130,13 @@ describe('Transfer Component', {retries:3}, () => {
 
     })
 
-    it.only('Correctly renders the Query card',()=>{
+    it('Correctly renders the Query card',()=>{
         // Test whether the query card exists
         cy.get('[data-test=card-query]').log('Query card exists');
 
         // Find query card header & expand the query card
         cy.get('[data-test=card-header-query]')
             .click()
-
-        cy.fixture('queries').then((queries)=>{
-            const nQueries = Object.keys(queries).length;
-
-            // Test whether a button is rendered for every query
-            cy.get('[data-test=card-query] > .collapse > .card-body > .btn')
-                .should('have.length',nQueries)
-                .log('The number of query buttons is correct')
-        })
 
         // Test whether the syntax component for the query result exists
         cy.get('[data-test=query-result]').log('Query result syntax component exists')
