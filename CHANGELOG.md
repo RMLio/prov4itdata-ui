@@ -21,4 +21,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Removed public/rml folder (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/6))
 - Integration changes (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/18))
 
+### Fixed
+
+- Stale provider bug (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/26))
+
 ### Removed
