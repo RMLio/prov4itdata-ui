@@ -45,9 +45,21 @@ import urlJoin from "proper-url-join";
 function App() {
 
   let [mappingOptions, setMappingOptions] = useState()
-  let [mapping, setMapping] = useState( {
+  let [mapping, _setMapping] = useState( {
     content : storage.mappingContent.get() || '',
+    provider: storage.mappingProvider.get() || ''
   })
+
+  const setMapping = ({content, value, provider}) => {
+    console.log('setMapping: ', value)
+    // Update local storage
+    storage.mappingContent.set(content);
+    storage.pipelineId.set(value)
+    storage.mappingProvider.set(provider)
+
+    // Update state
+    _setMapping({content, value, provider})
+  }
 
   let [selectedOptionId, setSelectedOptionId] = useState(storage.pipelineId.get())
   let [generatedOutput, setGeneratedOutput] = useState("")
@@ -269,8 +281,7 @@ function App() {
 
       switch (referentRecord['type']) {
         case 'mapping':
-          // Update local storage
-          storage.mappingContent.set(body);
+
           // Update ui
           setMapping({
             content:body,
@@ -336,7 +347,7 @@ function App() {
 
 
       const {referentRecord} = getStepAndReferentRecord(configurationRecords, currentPipelineId, currentPipelineStep)
-
+      console.log('referent record: ' , referentRecord)
       // Precondition check functions
       // Solid
       const checkSolidConnection = async () => {
@@ -350,13 +361,19 @@ function App() {
       }
 
       // Provider
-      const {provider} = referentRecord;
       const checkProviderConnection = async () => {
-        console.log('@iterationPreconditionFunction: provider');
+        const provider = storage.mappingProvider.get()
+        if(!provider)
+          return false
+        console.log('@iterationPreconditionFunction: provider: ', provider);
         const providerConnected = await isProviderConnected(provider);
         return providerConnected
       }
       const establishProviderConnection = async () => {
+        const provider = storage.mappingProvider.get()
+        if(!provider)
+          throw Error('Provider is undefined!')
+        console.log('establishing provider connection with: ' ,provider)
         await handleProviderConnection(provider)
       }
 

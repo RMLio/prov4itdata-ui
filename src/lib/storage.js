@@ -3,6 +3,7 @@ const ls = localStorage;
 export const STORAGE_KEYS = {
     MAPPING_CONTENT: 'MAPPING_CONTENT',
     MAPPING_URL: 'MAPPING_URL',
+    MAPPING_PROVIDER: 'MAPPING_PROVIDER',
     EXECUTION_ATTEMPTS: 'EXECUTE_ATTEMPTS',
     EXECUTION_STATUS: 'EXECUTION_STATUS',
     AUTHORIZATION_ATTEMPTS: 'AUTHORIZATION_ATTEMPTS',
@@ -65,6 +66,8 @@ export const executionIteratorIndex = new StorageObject(sk.EXECUTION_ITERATOR_IN
 export const preconditionCheckIteration = new StorageObject(sk.PRECONDITION_CHECK_ITERATION, JSON.stringify, JSON.parse)
 // Mapping content
 export const mappingContent = new StorageObject(sk.MAPPING_CONTENT)
+// Mapping provider
+export const mappingProvider = new StorageObject(sk.MAPPING_PROVIDER)
 
 // Pipeline
 export const pipelineId = new StorageObject(sk.SELECTED_PIPELINE_ID)
