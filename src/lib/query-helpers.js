@@ -20,8 +20,10 @@ export const executeQuery = async (engine,
         if(queryResult) {
             // Process metadata, if any
             if(queryResult.metadata) {
-                const metadata = await queryResult.metadata();
-                onMetadataAvailable(metadata)
+                // The metadata needs some preprocessing first
+                // TODO: recheck
+                const processedMetadata = await processQueryResultMetadata(queryResult)
+                onMetadataAvailable(processedMetadata)
             }
 
             // Process the actual query result data
@@ -47,4 +49,55 @@ export const executeQuery = async (engine,
     }
 
 
+}
+
+/**
+ * TODO: recheck
+ * Returns promise to the processed metadata of the query result
+ * @param queryResult: query result from the comunica engine
+ * @returns {Promise<{}>}
+ */
+const processQueryResultMetadata = async (queryResult) => {
+
+    return new Promise(async (resolve, reject)=>{
+        try {
+            if (queryResult.metadata) {
+                // Extract metadata from query result
+                const metadataPromise = await queryResult.metadata();
+
+                // Helper for processing an observation record.
+                const processObservationRecord = async (or) => {
+                    const metadata = await or.metadata()
+
+                    // Following keys are excluded to reduce verbosity
+                    const actionKeysToExclude = ['context']
+                    actionKeysToExclude.forEach(k => {
+                        delete or.action[k]
+                    })
+
+                    return  {
+                        ...or,
+                        metadata,
+                    }
+                }
+
+                const { observationRecords } = metadataPromise;
+                // skip first observation record (duplicate)
+                const [_,...processedObservationRecords] = await Promise.all(observationRecords.map(processObservationRecord));
+
+                // Update metadata with processed observation records
+                const result = {
+                    result : {
+                        ...metadataPromise,
+                        observationRecords: processedObservationRecords
+                    }
+                }
+
+                // Resolve the promise
+                resolve(result)
+            }
+        } catch (err) {
+            reject(err)
+        }
+    })
 }
