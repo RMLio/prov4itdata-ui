@@ -21,8 +21,9 @@ export const executeQuery = async (engine,
             // Process metadata, if any
             if(queryResult.metadata) {
                 // The metadata needs some preprocessing first
-                // TODO: recheck
+                console.log('preprocessing metadata!')
                 const processedMetadata = await processQueryResultMetadata(queryResult)
+                console.log('preprocessed metadata:  ', processedMetadata)
                 onMetadataAvailable(processedMetadata)
             }
 
@@ -52,7 +53,6 @@ export const executeQuery = async (engine,
 }
 
 /**
- * TODO: recheck
  * Returns promise to the processed metadata of the query result
  * @param queryResult: query result from the comunica engine
  * @returns {Promise<{}>}
