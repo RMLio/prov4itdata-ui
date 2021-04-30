@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@prov4itdata/actor-init-sparql": "^1.0.0",
+    "@comunica/actor-rdf-dereference-fallback": "^1.21.1",
+    "@comunica/actor-rdf-resolve-hypermedia-links-queue-fifo": "^1.21.1",
+    "@comunica/bus-rdf-resolve-hypermedia-links-queue": "^1.21.1",
+    "@prov4itdata/actor-init-sparql": "^1.1.0",
+    "@prov4itdata/actor-optimize-query-operation-provenance-wrapper": "^1.1.0",
+    "@prov4itdata/actor-query-operation-collect-provenance": "^1.1.1",
     "@prov4itdata/actor-rdf-metadata-extract-annotate-provenance": "^1.0.0",
     "@prov4itdata/actor-rdf-resolve-quad-pattern-federated": "^1.0.0",
     "@testing-library/jest-dom": "^5.11.4",
