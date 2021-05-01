@@ -1,25 +1,22 @@
-# Getting Started with Create React App
+# PROV4ITDaTa: ui
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This is the user interface for [PROV4ITDaTa: web-app](https://github.com/RMLio/prov4itdata-web-app) and was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
 
-## Available Scripts
+## Development
+
+### Available Scripts
 
 In the project directory, you can run:
 
-### `yarn start`
+#### `yarn start`
 
 Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+Open [http://localhost:3001](http://localhost:3001) to view it in the browser.
 
 The page will reload if you make edits.\
 You will also see any lint errors in the console.
 
-### `yarn test`
-
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `yarn build`
+#### `yarn build`
 
 Builds the app for production to the `build` folder.\
 It correctly bundles React in production mode and optimizes the build for the best performance.
@@ -29,7 +26,7 @@ Your app is ready to be deployed!
 
 See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
 
-### `yarn eject`
+#### `yarn eject`
 
 **Note: this is a one-way operation. Once you `eject`, you can’t go back!**
 
@@ -39,35 +36,48 @@ Instead, it will copy all the configuration files and the transitive dependencie
 
 You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
 
-## Learn More
+### Tests
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+#### Option 1: Two foreground processes
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+Open two CLIs:
 
-### Code Splitting
+- CLI #1 for running the development server (without opening a browser): `yarn run start:nb`
+- CLI #2 for running the tests (two options): 
+  - Using Cypress Test Runner: `yarn run cypress:open`
+  - Headless: `yarn run cypress:run-headless`
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+#### Option 2: Development server in the background
 
-### Analyzing the Bundle Size
+Start the development server and run the Cypress tests using the `test`-script.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+> Note that this will run a development server in a background process.
 
-### Making a Progressive Web App
+```bash
+yarn run test
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+Or do it manually using the following commands:
 
-### Advanced Configuration
+```bash
+# Start the development server in the background
+yarn run start:ci &
+# Run Cypress tests
+yarn run cypress:run --browser chrome --headless
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+### Troubleshooting
 
-### Deployment
+#### Port already in use
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+This might occur when there is already running a development server in the background. In that case, you might want to identify & that process.
 
-### `yarn build` fails to minify
+You can identify which process is already using a particular port using `lsof`.
+For example, the following command shows processes using port `3001`.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+```bash
+lsof -nP -i4TCP:3001
+```
 
 ## License
 
