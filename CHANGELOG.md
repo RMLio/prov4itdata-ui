@@ -18,7 +18,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 
-- Removed public/rml folder (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/6))
 - Integration changes (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/18))
 - Update to PROV4ITDaTa monorepo `v1.1.1` (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/28))
 
@@ -27,3 +26,5 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Stale provider bug (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/26))
 
 ### Removed
+
+- Removed public/rml folder (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/6))
