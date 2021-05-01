@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+## [0.2.0] - 2021-05-01
+
 ### Added
 
 - Transfer view as React component (see [MR](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/merge_requests/1))
@@ -28,3 +30,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Removed
 
 - Removed public/rml folder (see [issue](https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/issues/6))
+
+
+[0.2.0]: https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/compare/v0.1.0...v0.2.0
+[0.1.0]: https://gitlab.ilabt.imec.be/prov4itdata-dapsi/ui/-/tags/v0.1.0

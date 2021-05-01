@@ -1,7 +1,7 @@
 {
-  "name": "ui",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@prov4itdata/ui",
+  "version": "0.2.0",
+  "private": false,
   "dependencies": {
     "@comunica/actor-rdf-dereference-fallback": "^1.21.1",
     "@comunica/actor-rdf-resolve-hypermedia-links-queue-fifo": "^1.21.1",
